@@ -22,7 +22,6 @@
 #include <getopt.h>
 #include <stdlib.h>
 #include <ctype.h> 
-
 #include <time.h>
 
 #include "ds18b20.h"
@@ -30,7 +29,6 @@
 #include "sqlite.h"
 #include "send.h"
 #include "socket.h"
-
 
 
 
@@ -45,13 +43,12 @@ int main(int argc, char **argv)
 
 		char					*w_message = NULL;
 		float					temp;
-		int						TIME_I;				//采样时间间隔(单位秒)
 
-
-		time_t 					start, end;
+		int						Time_set = 0;	 //采样时间间隔(单位秒)
+		time_t 					Time_start;  // 采样开始时间
+		time_t 					Time_end;    // 采样结束时间
 
 		char					serial_number[32] = "";
-
 
 		char            		sqlite_path[128]="/home/iot25/yangjiayu/Get-message/src/../sqlite3/Temp.db";
 		char					output_file[128]="/home/iot25/yangjiayu/Get-message/src/../tmp/output.txt";
@@ -80,7 +77,7 @@ int main(int argc, char **argv)
 								server_port = atoi(optarg);      //若选项为 -p/--port，将参数值转换为整数并赋值给 port
 								break;
 						case 't':
-								TIME_I = atoi(optarg);
+								Time_set = atoi(optarg);
 								break;
 
 						case 'h':	
@@ -92,99 +89,89 @@ int main(int argc, char **argv)
 				}
 		}
 
-		if (!server_ip || !server_port || (TIME_I <= 0) )
+		if (!server_ip || !server_port || (Time_set <= 0)  ) 
 		{
 				Print_Client_Usage(argv[0]);
 				return -2;
 		}
 
 
-		time(&start);  // 获取开始时间
+
+		create_table(sqlite_path); //打开临时存储数据库
+
+		time(&Time_start);
 					      
 		while(1)				  
 		{	
+				time(&Time_end);
+
+
+				printf("1\n");
+
+				if( (Time_end - Time_start) >= Time_set )
+				{             
+	
+						w_message = generate_sensor_message();	 //格式化获取：时间、设备号、温度为字符串
 				
-				time(&end);    // 获取当前的时间
+						Time_start = Time_end;
+				} 
 
-				if( (difftime(end, start) > TIME_I ))
-				{
-						w_message = generate_sensor_message();   //格式化获取：时间、设备号、温度为字符串
-						start = end;
-				}
-
-
-				if( (connfd=server_client_init(server_ip, server_port)) < 0) //若服务器连接失败，数据临时存储到sqlite数据库Temp.db的表TempData下
-				{
-						printf("connect to server [%s:%d] failure,sending to Sqlite of Temp.db,retrying in 1 seconds...\n", server_ip, server_port);
 				
-						if( w_message )
+				if( (connfd=socket_client_init(server_ip, server_port)) < 0) //若服务器连接失败，数据临时存储到sqlite数据库Temp.db的表TempData下
+				{
+						printf("connect to server [%s:%d] failure,sending to Sqlite of Temp.db,retrying in 3 seconds...\n", server_ip, server_port);
+						
+						if( w_message != NULL )
 						{
-								create_table(sqlite_path);
 								sqlite_write(sqlite_path, w_message);
 								w_message = NULL;
-						}	
+						}
+						
+						sleep(3);
 						continue;
 				}
 
 
+
 				send_not_empty(sqlite_path, output_file, connfd);//重连成功，发送所有暂存数据给服务器,并清空
 
-				while(1)
-				{	
-							
-						time(&end);    // 获取当前的时间,每TIME_I获取一次数据
-
-						if( (difftime(end, start) > TIME_I ))
+				if( w_message )		
+				{  
+						if (send_all(connfd, w_message, strlen(w_message)) < 0) //使用 send_all() 完整发送当前数据
 						{
-								w_message = generate_sensor_message();   //格式化获取：时间、设备号、温度为字符串
-								start = end;
-						}	
-			
-						
-						if( w_message )
-						{
-							if (send_all(connfd, w_message, strlen(w_message)) < 0) //使用 send_all() 完整发送当前数据
-							{
-									printf("Write data to server [%s:%d] failure: %s\n", server_ip, server_port, strerror(errno));
-	    							close(connfd);
-									connfd = -1;
-									break; // 跳出内层循环，触发重连
-							}
-
-							w_message = NULL;
+								printf("Write data to server [%s:%d] failure: %s\n", server_ip, server_port, strerror(errno));
+	  							close(connfd);
+								connfd = -1;
+								continue; // 跳出内层循环，触发重连
 						}
-				
+				}
 						
-					
-						memset(buf, 0, sizeof(buf));
-				
-				/*		rv = read(connfd, buf, sizeof(buf));
-						if(rv < 0)
-						{
-									printf("Read data from server [%s:%d] failure: %s\n", server_ip, server_port, strerror(errno));
-									close(connfd);
-									connfd = -1;
-									break; // 跳出内层循环，触发重连
-						}
-
-						else if( 0 == rv)
-						{
-									printf("Client connect to server get disconnected\n");
-									close(connfd);
-									connfd = -1;
-									break; // 跳出内层循环，触发重连
-						}	
-				
-						printf("Read %d bytes data from server: %s\n", rv, buf);
-				*/
-				}
-
-				if (connfd != -1) 
-				{
-						w_message = NULL;
-						connfd = -1;
-				}
-			
+				memset(buf, 0, sizeof(buf));
+				//rv = read(connfd, buf, sizeof(buf));
+				//if(rv < 0)
+				//{
+				//		printf("Read data from server [%s:%d] failure: %s\n", server_ip, server_port, strerror(errno));
+				//		close(connfd);
+				//		connfd = -1;
+				//		continue; // 跳出内层循环，触发重连
+				//}
+		
+				//if( 0 == rv)
+				//{
+				//		printf("Client connect to server get disconnected\n");
+				//		close(connfd);
+				//		connfd = -1;
+				//		continue; // 跳出内层循环，触发重连
+				//}
+	
+				//printf("Read %d bytes data from server: %s\n", rv, buf);
+		}
+		
+		if (connfd != -1) 
+		{
+				close(connfd);
+				free(w_message);
+				connfd = -1;
 		}
 }
 
