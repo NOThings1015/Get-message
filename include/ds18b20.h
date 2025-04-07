@@ -2,19 +2,18 @@
  *      Copyright:  (C) 2025 LingYun<iot25@lingyun>
  *                  All rights reserved.
  *
- *       Filename:  usage.h
+ *       Filename:  ds18b20.h
  *    Description:  This file 
  *
- *        Version:  1.0.0(02/04/25)
+ *        Version:  1.0.0(05/04/25)
  *         Author:  LingYun <iot25@lingyun>
- *      ChangeLog:  1, Release initial version on "02/04/25 17:46:33"
+ *      ChangeLog:  1, Release initial version on "05/04/25 18:52:04"
  *                 
  ********************************************************************************/
-#ifndef 		USAGE_H
-#define 	USAGE_H
 
-extern	void print_usage(char *progname);
+#ifndef	DS18B20_H_
+#define DS18B20_H_
 
-extern	int usage_message(int argc, char **argv);
+extern int  get_ds18b20(char *serial_number,int buffer_size, float *temp);
 
 #endif

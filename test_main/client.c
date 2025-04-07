@@ -23,6 +23,9 @@
 #include <stdlib.h>
 
 
+#include "ds18b20.h"
+
+
 void print_usage(char *progname);
 
 int server_client_init(const char *server_ip, int server_port);
@@ -32,15 +35,17 @@ int server_client_init(const char *server_ip, int server_port);
 int main(int argc, char **argv)
 {
 
-	int             		server_port=0;
-	int						ch=0;
-	int             		connfd=-1;
-	char					*server_ip=NULL;
+	int             		server_port = 0;
+	int						ch = 0;
+	int             		connfd = -1;
+	char					*server_ip = NULL;
 	char					buf[200];
 
-	char					*w_message="ajbfnfabmknfbanba";
+	char					w_message[200] = "";
+	float					temp;
+	char					serial_number[32] = "";
 
-	int						rv=-1;
+	int						rv = -1;
 	struct sockaddr_in		serv_addr;
 
 	struct option   opts[]={
@@ -88,6 +93,15 @@ int main(int argc, char **argv)
 		return -4;
 	}
 	
+
+	if( (get_ds18b20(serial_number, sizeof(serial_number), &temp)) < 0 )  //获取设备版本号和温度
+	{
+		printf("ds18b20 get temprature failure: %s\n", rv);
+		
+	}
+
+	snprintf(w_message, sizeof(w_message), "Get serial_number: %s, temprature: %.3f", serial_number,  temp);  // 温度格式化为字符串，如 "25.500"
+
 	while(1)
 	{
 		if( write(connfd, w_message, strlen(w_message)) < 0 )
@@ -96,6 +110,9 @@ int main(int argc, char **argv)
 	    	close(connfd);
 			return -5;
 		}
+		
+		
+		sleep(10);
 
 		memset(buf, 0, sizeof(buf));
 		rv = read(connfd, buf, sizeof(buf));
