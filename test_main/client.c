@@ -126,15 +126,12 @@ int main(int argc, char **argv)
 				}
 
 
+				send_not_empty(sqlite_path, output_file, connfd);//重连成功，发送所有暂存数据给服务器,并清空
+
 				while(1)
 				{	
-			
-
-						send_not_empty(sqlite_path, output_file, connfd);//如果库文件非空，则发送给服务器	
 						
-
-						if (send_all(connfd, w_message, strlen(w_message)) < 0) // 使用 send_all 确保完整发送
-
+						if (send_all(connfd, w_message, strlen(w_message)) < 0) //使用 send_all() 完整发送当前数据
 						{
 								printf("Write data to server [%s:%d] failure: %s\n", server_ip, server_port, strerror(errno));
 	    						close(connfd);
@@ -143,14 +140,11 @@ int main(int argc, char **argv)
 						}
 	
 
-					
+						sleep(TIME_I);          //每TIME_I秒上报一次数据
 
 						w_message = generate_sensor_message();   //格式化获取：时间、设备号、温度为字符串
 
-						sleep(TIME_I);          //每TIME_I秒上报一次数据
 						
-						send_not_empty(sqlite_path, output_file, connfd);//如果库文件非空，则发送给服务器 
-
 						memset(buf, 0, sizeof(buf));
 						rv = read(connfd, buf, sizeof(buf));
 						if(rv < 0)
