@@ -18,12 +18,12 @@ App_name2=test_client
 #设置总目标all,编译生成可执行文件
 all:
 	make -C `pwd`/../src
-	gcc server.c -o ${App_name1} -I${Inc_path} -L${Lib_path} -l${Lib_name}
-	gcc client.c -o ${App_name2} -I${Inc_path} -L${Lib_path} -l${Lib_name}
+	gcc server.c -o ${App_name1} -I${Inc_path} -L${Lib_path} -l${Lib_name} -lsqlite3
+	gcc client.c -o ${App_name2} -I${Inc_path} -L${Lib_path} -l${Lib_name} -lsqlite3
 
 #设置run目标执行可执行文件，设置环境变量
 run_server:
-	export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:Lib_path
+	LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${Lib_path} ./$(App_name1) $(ARGS)
 
 
 run_client:

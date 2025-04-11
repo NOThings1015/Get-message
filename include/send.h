@@ -2,20 +2,21 @@
  *      Copyright:  (C) 2025 LingYun<iot25@lingyun>
  *                  All rights reserved.
  *
- *       Filename:  ds18b20.h
+ *       Filename:  send.h
  *    Description:  This file 
  *
- *        Version:  1.0.0(05/04/25)
+ *        Version:  1.0.0(11/04/25)
  *         Author:  LingYun <iot25@lingyun>
- *      ChangeLog:  1, Release initial version on "05/04/25 18:52:04"
+ *      ChangeLog:  1, Release initial version on "11/04/25 12:18:20"
  *                 
  ********************************************************************************/
+#ifndef SEND_H_
 
-#ifndef	DS18B20_H_
-#define DS18B20_H_
+#define SEND_H_
 
-extern int  get_ds18b20(char *serial_number,int buffer_size, float *temp);
+extern  int send_not_empty(char *sqlite_path, char *output_file, int connfd);
+extern  int send_data_from_file(char *output_file, int connfd);
 
-extern char *generate_sensor_message(void);
+extern	int send_all(int sockfd, const char *data, int length);
 
 #endif

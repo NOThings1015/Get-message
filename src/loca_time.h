@@ -2,20 +2,19 @@
  *      Copyright:  (C) 2025 LingYun<iot25@lingyun>
  *                  All rights reserved.
  *
- *       Filename:  ds18b20.h
+ *       Filename:  loca_time.h
  *    Description:  This file 
  *
- *        Version:  1.0.0(05/04/25)
+ *        Version:  1.0.0(08/04/25)
  *         Author:  LingYun <iot25@lingyun>
- *      ChangeLog:  1, Release initial version on "05/04/25 18:52:04"
+ *      ChangeLog:  1, Release initial version on "08/04/25 15:08:00"
  *                 
  ********************************************************************************/
+#ifndef	LOCA_TIME_H
 
-#ifndef	DS18B20_H_
-#define DS18B20_H_
+#define	LOCA_TIME_H
 
-extern int  get_ds18b20(char *serial_number,int buffer_size, float *temp);
-
-extern char *generate_sensor_message(void);
+extern	int get_time(char *buffer, int buf_size);
 
 #endif
+

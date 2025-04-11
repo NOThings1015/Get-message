@@ -20,7 +20,60 @@
 #include <unistd.h>  
 #include <stdlib.h>
 
+#include "loca_time.h"
+
 #define buf_size 200
+
+int  get_ds18b20(char *serial_number, int buffer_size, float *temp);
+char *generate_sensor_message(void);
+
+
+char *generate_sensor_message(void)
+{
+
+		int			mes_size = 128;
+		char 		time[52];             // 时间缓冲区
+		char 		serial_number[32];    // 设备号缓冲区
+		float 		temp;                // 温度值
+		char 		*message = NULL;      // 返回的报文
+
+		// 获取时间
+		if (get_time(time, sizeof(time)) < 0)
+		{
+				fprintf(stderr, "Get time failure.\n");
+				return NULL;
+		}
+
+		// 获取传感器数据
+		if (get_ds18b20(serial_number, sizeof(serial_number), &temp) < 0)
+		{
+			 	fprintf(stderr, "ds18b20 get temperature failure: %s\n", strerror(errno));
+				return NULL;
+		}
+
+		// 分配内存
+		if ((message = malloc(mes_size)) == NULL)
+		{
+			  	fprintf(stderr, "Memory allocation failed: %s\n", strerror(errno));
+				return NULL;
+		}
+
+		// 格式化报文
+		int len = snprintf(message, mes_size, "%s: %s, temperature: %.3f\n", time, serial_number, temp);
+
+		// 检查格式化结果
+		if (len < 0 || len >= mes_size)
+		{
+			  	fprintf(stderr, "Message formatting failed\n");
+				free(message);
+				return NULL;
+		}
+
+		return message;
+}
+
+
+
 
 int  get_ds18b20(char *serial_number, int buffer_size, float *temp)
 {

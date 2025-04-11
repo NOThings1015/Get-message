@@ -10,7 +10,6 @@
  *      ChangeLog:  1, Release initial version on "01/04/25 13:12:21"
  *                 
  ********************************************************************************/
-
 #include<stdio.h>
 #include <libgen.h>  
 #include <sys/types.h> 
@@ -23,10 +22,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/epoll.h>
-#define	 Max_event	512
+#include <ctype.h> 
 
-int socket_server_init(char *listen_ip,int listen_port);
-void print_usage(char *progname);
+#include "loca_time.h"
+#include "sqlite.h"
+#include "socket.h"
+
+
+#define	 Max_event	512
 
 
 int main(int argc, char **argv)
@@ -47,6 +50,9 @@ int main(int argc, char **argv)
 	struct epoll_event		event_array[Max_event];
 	int						events;
 
+	
+	char                    sqlite_path[128]="/home/iot25/yangjiayu/Get-message/src/../sqlite3/Storage_temp.db";
+
 	struct option   opts[]={
 		{"port", required_argument, NULL, 'p'},     // -p 或 --port，需参数（端口号）
 	    {"help", no_argument, NULL, 'h'},           // -h 或 --help，无需参数
@@ -63,16 +69,17 @@ int main(int argc, char **argv)
 					serv_port=atoi(optarg);      //若选项为 -p/--port，将参数值转换为整数并赋值给 port
 					break;
 			case 'h':
-					print_usage(argv[0]);   //若选项为 -h/--help，调用 print_usage 并返回 0。
+					Print_Server_Usage(argv[0]);   //若选项为 -h/--help，调用 print_usage 并返回 0。
 					return -1; 
 			default:
+					Print_Server_Usage(argv[0]); 
 					break;
 		}   
 	}   
 
 	if(!serv_port)
 	{   
-		print_usage(argv[0]);
+		Print_Server_Usage(argv[0]); 
 		return -1; 
 	}   
 
@@ -84,6 +91,8 @@ int main(int argc, char **argv)
 
 	printf(" %s server start to listen on port %d \n", argv[0], serv_port);
 	
+
+
 	if( (epollfd=epoll_create(Max_event)) < 0) //创建epoll对象
 	{
 		printf("epoll_create() failure: %s\n", strerror(errno));
@@ -143,25 +152,38 @@ int main(int argc, char **argv)
 
 			}
 			
-			
+
+
 			else  //已连接的客户端有数据收发
 			{
-				if( (rv=read(event_array[i].data.fd, buf, sizeof(buf))) <= 0)
+
+				memset(buf, 0, sizeof(buf));
+
+				if( (rv=read(event_array[i].data.fd, buf, sizeof(buf))) <= 0 )
 				{
 					printf("socket[%d] read failure or get disconnect and will be removed.\n", event_array[i].data.fd);
 					epoll_ctl(epollfd, EPOLL_CTL_DEL, event_array[i].data.fd, NULL);
 					close(event_array[i].data.fd);
-					continue;
+					
+				}	
+					
+
+				if( (sqlite_write(sqlite_path, buf)) < 0 )     //上传数据存储到指定库文件里面
+				{
+						printf("Write to sqlite failure.\n");
+						return -2;
 				}
 
-				printf("socket[%d] read get %d bytes data\n", event_array[i].data.fd, rv);
+				printf("socket[%d] read get %d bytes data: %s\n", event_array[i].data.fd, rv, buf);
 
-				if( write(event_array[i].data.fd, buf, rv) < 0)
+				if( (write(event_array[i].data.fd, buf, rv)) < 0 )
 				{
 					printf("socket[%d] write failure: %s\n", event_array[i].data.fd, strerror(errno));
 					epoll_ctl(epollfd, EPOLL_CTL_DEL, event_array[i].data.fd, NULL);
 					close(event_array[i].data.fd);
 				}
+
+				//printf("Write to connfd : %s\n", buf);
 			}
 
 			
@@ -173,70 +195,7 @@ CleanUp:
 }
 				
 
-int socket_server_init(char *listen_ip,int listen_port);
 
-
-int socket_server_init(char *listen_ip,int listen_port)
-{
-	struct sockaddr_in			servaddr;
-	int 						rv=0;
-	int							on=1;
-	int							listenfd;
-
-	if( (listenfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-	{
-		printf("Use socket() to create a TCP socket failure:%s\n",strerror(errno));
-		return -1;
-	}
-
-	setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
-	
-	memset(&servaddr, 0, sizeof(servaddr));
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_port = htons(listen_port);
-
-	if(listen_ip == 0)
-	{
-		servaddr.sin_addr.s_addr = htonl(INADDR_ANY); //if don't set IP,Please listen all of it;
-	}
-
-	else
-	{
-		if(inet_pton(AF_INET, listen_ip, &servaddr.sin_addr) <=0)
-		{
-			printf("inet_pton() set listen IP address failure:%s\n",strerror(errno));
-			rv = -2;
-			close(listenfd);
-		}
-	}
-
-	if(bind(listenfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0)
-	{
-		printf("Use bind() to  bind the TCP socket failure:%s\n",strerror(errno));
-		rv = -3;
-		close(listenfd);
-	}
-
-	if(listen(listenfd, 200) < 0)
-	{
-		printf("Use listen() to listen listenfd failure:%s",strerror(errno));
-		rv = -4;
-		close(listenfd);
-	}
-
-	rv = listenfd;
-	return rv;
-
-}
-
-
-void print_usage(char *progname)
-{
-	printf("%s usage method:\n",progname);
-	printf("-p(--port):sepcify serveer listen port.\n");		 
-	printf("-h(--help):printf this help information.\n");
-	return ;
-}
 
 
 

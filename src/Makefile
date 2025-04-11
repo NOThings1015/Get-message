@@ -19,7 +19,7 @@ all: dynamic_lib static_lib
 
 #dynamic_lib目标用来编译生成动态库，是all总目标的·一个依赖：
 dynamic_lib:
-	${CC} -shared -fPIC *.c -o lib${Lib_name}.so
+	${CC} -shared -fPIC *.c -o lib${Lib_name}.so -L ${Lib_path} -l${Lib_name} -I ${Inc_path}
 
 
 #static_lib目标用来编译生成静态库，是all目标的一个依赖：
