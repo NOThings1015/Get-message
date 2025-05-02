@@ -106,7 +106,7 @@ int main(int argc, char **argv)
 				
 				time(&end);    // 获取当前的时间
 
-				if( (difftime(end, start) > TIME_I ))
+				if( (difftime(end, start) >= TIME_I ))
 				{
 						w_message = generate_sensor_message();   //格式化获取：时间、设备号、温度为字符串
 						start = end;
@@ -134,7 +134,7 @@ int main(int argc, char **argv)
 							
 						time(&end);    // 获取当前的时间,每TIME_I获取一次数据
 
-						if( (difftime(end, start) > TIME_I ))
+						if( (difftime(end, start) >= TIME_I ))
 						{
 								w_message = generate_sensor_message();   //格式化获取：时间、设备号、温度为字符串
 								start = end;
@@ -157,8 +157,9 @@ int main(int argc, char **argv)
 						
 					
 						memset(buf, 0, sizeof(buf));
-				
-				/*		rv = read(connfd, buf, sizeof(buf));
+			
+					/*
+						rv = read(connfd, buf, sizeof(buf));
 						if(rv < 0)
 						{
 									printf("Read data from server [%s:%d] failure: %s\n", server_ip, server_port, strerror(errno));
@@ -176,7 +177,7 @@ int main(int argc, char **argv)
 						}	
 				
 						printf("Read %d bytes data from server: %s\n", rv, buf);
-				*/
+					*/
 				}
 
 				if (connfd != -1) 
