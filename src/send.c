@@ -47,7 +47,6 @@ int send_not_empty(char *sqlite_path, char *output_file, int connfd)
 								i--;		
 								break;
 						}
-					    sleep(1);  // 重试间隔
 				}
 		}
 		return i;		

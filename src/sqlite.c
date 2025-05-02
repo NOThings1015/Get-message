@@ -1,4 +1,4 @@
-/*********************************************************************************
+/********************************************************************************
  *      Copyright:  (C) 2025 LingYun<iot25@lingyun>
  *                  All rights reserved.
  *
@@ -24,21 +24,20 @@ int sqlite_read(char *sqlite_path, char  *output_file); //读取指定数据库�
 int sqlite_clear(char *sqlite_path);   					//清除指定数据库中的数据
 int is_database_empty(const char *sqlite_path);
 
-//int main()
-//{
-//	char	sqlite_path[200]="/home/iot25/yangjiayu/Get-message/sqlite3/lalalal.db";
-//	char    message[20]="Hello!!!";
-//	char    output_file[128] = "/home/iot25/yangjiayu/Get-message/tmp/output_file.txt";
-//	int     i=0;
-//
-//	create_table(sqlite_path);
-//	for(i=0;i<6;i++)
-//	{
-//		sqlite_write(sqlite_path,message);
-//
-//	}
-//	sqlite_read(sqlite_path, output_file);
-//}
+
+int main()
+{
+	char    	sqlite_path[128]="/home/iot25/yangjiayu/Get-message/src/../sqlite3/Storage_temp.db";
+//	char    	sqlite_path[128]="/home/iot25/yangjiayu/Get-message/src/../sqlite3/Temp.db";
+	
+	char    	message[20]="Hello!!!";
+	char        output_file[128]="/home/iot25/yangjiayu/Get-message/src/../tmp/output.txt";
+	int     	i=0;
+
+	create_table(sqlite_path);
+	sqlite_read(sqlite_path, output_file);
+//	sqlite_clear(sqlite_path); 
+}
 
 
 
