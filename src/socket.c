@@ -81,7 +81,7 @@ int socket_server_init(char *listen_ip,int listen_port)
 }
 
 
-int server_client_init(const char *server_ip, int server_port)
+int socket_client_init(const char *server_ip, int server_port)
 {
 	struct sockaddr_in      serv_addr;
 	int                     connfd;

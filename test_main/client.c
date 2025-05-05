@@ -18,13 +18,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+#include <signal.h>
 #include <getopt.h>
 #include <stdlib.h>
 #include <ctype.h> 
-
 #include <time.h>
-
+#include <sqlite3.h>
 #include "ds18b20.h"
 #include "loca_time.h"
 #include "sqlite.h"
@@ -32,6 +31,12 @@
 #include "socket.h"
 
 
+void handle_sigpipe(int sig) 
+{
+	    // 忽略 SIGPIPE 信号，不进行任何处理
+	     return;
+
+}
 
 
 int main(int argc, char **argv)
@@ -48,8 +53,9 @@ int main(int argc, char **argv)
 		int						TIME_I;				//采样时间间隔(单位秒)
 
 
-		time_t 					start, end;
-
+		time_t 					start = 0;
+		time_t					end = 0;
+		sqlite3         		*db;
 		char					serial_number[32] = "";
 
 
@@ -58,8 +64,12 @@ int main(int argc, char **argv)
 
 		int 					read_flage = 0;
 
+
 		int						rv = -1;
 		struct sockaddr_in		serv_addr;
+
+		int    					conn_flag = 0;
+		char*					table_name = "TempData";
 
 		struct option   opts[]={
 			{"ip",   required_argument, NULL, 'i'},    // -i 或 --ip， 需参数（服务器地址）
@@ -98,12 +108,17 @@ int main(int argc, char **argv)
 				return -2;
 		}
 
+		if (create_table(sqlite_path) != 0) //创建temperature表
+		{
+				fprintf(stderr, "Failed to create table.\n");
+				return -1;
+		}   
 
-		time(&start);  // 获取开始时间
-					      
+		signal(SIGPIPE, handle_sigpipe); // 捕获 SIGPIPE 信号					
+
 		while(1)				  
 		{	
-				
+				w_message = NULL;
 				time(&end);    // 获取当前的时间
 
 				if( (difftime(end, start) >= TIME_I ))
@@ -112,86 +127,65 @@ int main(int argc, char **argv)
 						start = end;
 				}
 
-
-				if( (connfd=server_client_init(server_ip, server_port)) < 0) //若服务器连接失败，数据临时存储到sqlite数据库Temp.db的表TempData下
+				if(conn_flag == 0 )		//如果连接失败，则重连		
 				{
-						printf("connect to server [%s:%d] failure,sending to Sqlite of Temp.db,retrying in 1 seconds...\n", server_ip, server_port);
-				
-						if( w_message )
+
+						if( (connfd=socket_client_init(server_ip, server_port)) < 0) //若服务器连接失败，数据临时存储到sqlite数据库Temp.db的表TempData下
 						{
-								create_table(sqlite_path);
-								sqlite_write(sqlite_path, w_message);
-								w_message = NULL;
-						}	
-						continue;
-				}
+								//printf("connect to server [%s:%d] failure,sending to Sqlite of Temp.db,retrying in 1 seconds...\n", server_ip, server_port);
 
-
-				send_not_empty(sqlite_path, output_file, connfd);//重连成功，发送所有暂存数据给服务器,并清空
-
-				while(1)
-				{	
-							
-						time(&end);    // 获取当前的时间,每TIME_I获取一次数据
-
-						if( (difftime(end, start) >= TIME_I ))
-						{
-								w_message = generate_sensor_message();   //格式化获取：时间、设备号、温度为字符串
-								start = end;
-						}	
-			
-						
-						if( w_message )
-						{
-							if (send_all(connfd, w_message, strlen(w_message)) < 0) //使用 send_all() 完整发送当前数据
-							{
-									printf("Write data to server [%s:%d] failure: %s\n", server_ip, server_port, strerror(errno));
-	    							close(connfd);
-									connfd = -1;
-									break; // 跳出内层循环，触发重连
-							}
-
-							w_message = NULL;
-						}
-				
-						
-					
-						memset(buf, 0, sizeof(buf));
-			
-					/*
-						rv = read(connfd, buf, sizeof(buf));
-						if(rv < 0)
-						{
-									printf("Read data from server [%s:%d] failure: %s\n", server_ip, server_port, strerror(errno));
-									close(connfd);
-									connfd = -1;
-									break; // 跳出内层循环，触发重连
+								close(connfd);
+								connfd = -1;
+								if( w_message )
+								{
+										sqlite_write(sqlite_path, w_message);
+								}	
+								continue;
 						}
 
-						else if( 0 == rv)
-						{
-									printf("Client connect to server get disconnected\n");
-									close(connfd);
-									connfd = -1;
-									break; // 跳出内层循环，触发重连
-						}	
+						conn_flag = 1;
+				}
 				
-						printf("Read %d bytes data from server: %s\n", rv, buf);
-					*/
+				
+				
+				//send_not_empty(sqlite_path, output_file, connfd);//重连成功，发送所有暂存数据给服务器,并清空	
+								
+				if( w_message )		//如果有数据则发送
+				{
+						if (send_all(connfd, w_message, strlen(w_message)) < 0) //使用 send_all() 完整发送当前数据
+						{
+								printf("Write data to server [%s:%d] failure: %s\n", server_ip, server_port, strerror(errno));
+	    						
+								sqlite_write(sqlite_path, w_message);	//发送失败，写入数据库
+								
+								close(connfd);
+								connfd = -1;
+								conn_flag = 0;
+								continue; // 跳出内层循环，触发重连
+						}	
+
+						printf("Send w_message: %s\n",w_message);
 				}
 
-				if (connfd != -1) 
+
+				if(!is_database_empty(sqlite_path))		//如果数据库非空
 				{
-						w_message = NULL;
-						connfd = -1;
+
+						if( (sqlite_read_1st(sqlite_path, connfd)) == 0 )
+						{
+								delete_1st_row(sqlite_path, table_name);	//成功读取数据则删除缓存区
+						}
 				}
-			
+
+		}
+
+		if (connfd != -1) 
+		{
+			    sqlite3_close(db);	//关闭数据库
+				close(connfd);		//关闭套接字
+				connfd = -1;
 		}
 }
-
-
-
-
 
 
 void Print_Client_Usage(char *progname)
