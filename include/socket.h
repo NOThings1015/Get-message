@@ -16,7 +16,7 @@
 
 extern int socket_server_init(char *listen_ip,int listen_port); //服务器端定义
 
-extern int server_client_init(const char *server_ip, int server_port); //客户端定义
+extern int socket_client_init(const char *server_ip, int server_port); //客户端定义
 
 extern void Print_Client_Usage(char *progname); //客户端使用方法
 
