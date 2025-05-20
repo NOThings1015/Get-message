@@ -17,6 +17,6 @@
 extern  int send_not_empty(char *sqlite_path, char *output_file, int connfd);
 extern  int send_data_from_file(char *output_file, int connfd);
 
-extern	int send_all(int sockfd, const char *data, int length);
+extern	int send_message(int sockfd, const char *data, int length);
 
 #endif

@@ -110,6 +110,7 @@ int socket_client_init(const char *server_ip, int server_port)
 		return -3; 
 	}   
 
+	printf("Client connect to server: [%s:%d]\n", server_ip, server_port); 
 	return connfd;
 
 }

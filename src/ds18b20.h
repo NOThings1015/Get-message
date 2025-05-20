@@ -16,6 +16,6 @@
 
 extern int  get_ds18b20(char *serial_number,int buffer_size, float *temp);
 
-extern char *generate_sensor_message(void);
+extern int generate_sensor_message(char *buffer, size_t buffer_size);
 
 #endif
