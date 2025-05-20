@@ -28,7 +28,6 @@ run_server:
 
 run_client:
 #	export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${Lib_path}
-	# 直接运行（临时指定库路径）
 	@LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${Lib_path} ./$(App_name2) $(ARGS)
 
 

@@ -28,7 +28,7 @@
 
 int send_data_from_file(char *output_file, int connfd);
 
-int send_all(int sockfd, const char *data, int length);
+int send_message(int sockfd, const char *data, int length);
 
 
 
@@ -78,7 +78,7 @@ int send_data_from_file(char *output_file, int connfd)
 				if (read_bytes == 0) break;
 
 				// 发送数据块
-				if (send_all(connfd, buffer, read_bytes) < 0) 
+				if (send_message(connfd, buffer, read_bytes) < 0) 
 				{
 						fseek(fp, file_pos, SEEK_SET);  // 回退到上次成功位置
 						break;
@@ -99,7 +99,7 @@ int send_data_from_file(char *output_file, int connfd)
 
 
 
-int send_all(int sockfd, const char *data, int length)
+int send_message(int sockfd, const char *data, int length)
 {
 		int total_sent = 0;			//累计发送量
 		
