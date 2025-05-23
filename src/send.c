@@ -21,7 +21,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>  // 用于 fileno 和 ftruncate
 #include <time.h>   // 用于 sleep
-
+#include <sqlite3.h>
 #include "sqlite.h"
 
 
@@ -33,17 +33,17 @@ int send_message(int sockfd, const char *data, int length);
 
 
 
-int send_not_empty(char *sqlite_path, char *output_file, int connfd)
+int send_not_empty(sqlite3 *db, char *output_file, int connfd)
 {
 		int      i = 0;
-		if(!is_database_empty(sqlite_path)) 
+		if(is_database_empty(db)) 
 		{
 	    		for (int retry = 0; retry < 3; retry++) 
 				{
 						i = 0;
-			        	if (sqlite_read(sqlite_path, output_file) == 0 && send_data_from_file(output_file, connfd) == 0) 
+			        	if (sqlite_read(db, output_file) == 0 && send_data_from_file(output_file, connfd) == 0) 
 						{
-								sqlite_clear(sqlite_path);  // 仅在成功时清除
+								sqlite_clear(db);  // 仅在成功时清除
 								i--;		
 								break;
 						}

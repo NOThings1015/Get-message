@@ -17,14 +17,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-
-int create_table(char *sqlite_path);					//指定路径创建sqlite数据库表格
-int sqlite_write(char *sqlite_path, char *message); 	//上传数据存储到指定库文件里面
-int sqlite_read(char *sqlite_path, char  *output_file); //读取指定数据库中的数据,将数据写入文件
-int sqlite_clear(char *sqlite_path);   					//清除指定数据库中的数据
-int is_database_empty(const char *sqlite_path);
-int sqlite_read_1st(char *sqlite_path, int fd);
-int delete_1st_row(char* db_path, char* table_name);
+#include "sqlite.h"
 
 /*
 int main()
@@ -37,25 +30,28 @@ int main()
 	char    output_file[128] = "/home/iot25/yangjiayu/Get-message/tmp/output_file.txt";
 	int     i=0;
 
-	create_table(sqlite_path);
+	sqlite3 *db;
+
+	db = sqlite_open(sqlite_path);
+	create_table(db);
 	
 	for(i=0;i<6;i++)
 	{
-		sqlite_write(sqlite_path,message);
+		sqlite_write(db,message);
 
 	}
 	
-	sqlite_read(sqlite_path, output_file);
+	sqlite_read(db, output_file);
 
 	
 	int fd = STDOUT_FILENO; // 使用标准输出文件描述符
 
 	// 调用封装函数
-	if (sqlite_read_1st(sqlite_path, fd) == 0)
+	if (sqlite_read_1st(db, fd) == 0)
 	{
 		printf("Data successfully read and written to file descriptor.\n");
 
-		delete_1st_row(sqlite_path, table_name);
+		delete_1st_row(db, table_name);
 	}
 
 	else 
@@ -67,25 +63,33 @@ int main()
 //	sqlite_clear(sqlite_path);
 	return 0;
 }
-
 */
+
 
 //时间戳去重机制
 //问题原因：
 //若客户端断线期间多次写入相同数据，服务器无法识别重复消息。
-int create_table(char *sqlite_path) 
+sqlite3 *sqlite_open(char *sqlite_path)
 {
-    sqlite3 *db;
+		sqlite3 *db;
+    	char *errMsg = NULL;
+    	int rc;
+
+    	rc = sqlite3_open(sqlite_path, &db);
+    	if (rc) 
+		{
+    		    fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
+        		sqlite3_close(db);
+       			return NULL;
+    	}
+
+		return db;
+}
+
+int create_table(sqlite3 *db) 
+{
     char *errMsg = NULL;
     int rc;
-
-    rc = sqlite3_open(sqlite_path, &db);
-    if (rc) 
-	{
-    	    fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
-        	sqlite3_close(db);
-       		return -1;
-    }
 
     const char *createTableSQL = "CREATE TABLE IF NOT EXISTS TempData ("
                                 "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -101,28 +105,14 @@ int create_table(char *sqlite_path)
        		return -2;
     }
 
-    sqlite3_close(db);
     return 0;
 }
 
 
-int	sqlite_write(char *sqlite_path, char *message)
+int	sqlite_write(sqlite3 *db, char *message)
 {
-	sqlite3 		*db;
 	char 			*errMsg = NULL;
 	int 			rc=-1;
-
-	// 打开数据库
-	rc = sqlite3_open(sqlite_path, &db);
-	if (rc) 
-	{
-			fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
-			sqlite3_close(db);
-			return -1;
-	}
-	
-	
-	//printf("[DEBUG] Trying to write to SQLite:\n %s\n", message); // 打印待写入的数据
 
 	// 插入临时数据（使用参数化查询）
 	const char *insertSQL = "INSERT INTO TempData (data) VALUES (?);";
@@ -132,7 +122,6 @@ int	sqlite_write(char *sqlite_path, char *message)
 	{
 			fprintf(stderr, "SQL error: %s\n", errMsg);
 			sqlite3_free(errMsg);
-			sqlite3_close(db);
 			return -2;
 	}
 	
@@ -142,7 +131,6 @@ int	sqlite_write(char *sqlite_path, char *message)
 	{
 			fprintf(stderr, "SQL error: %s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
-			sqlite3_close(db);
 			return -3;
 	}
 	
@@ -152,39 +140,27 @@ int	sqlite_write(char *sqlite_path, char *message)
 	{
 			fprintf(stderr, "SQL error: %s\n", sqlite3_errmsg(db));
 			sqlite3_finalize(stmt);
-			sqlite3_close(db);
 			return -4;									
 	}
 
 
-	printf("[SUCCESS] Data written to SQLite: %s\n", message);  // 打印插入成功日志
+	printf("######[SUCCESS] Data written to SQLite: %s\n", message);  // 打印插入成功日志
 	
 	sqlite3_finalize(stmt);
-	// 关闭数据库
-	sqlite3_close(db);
-
+	
 	//printf("[INFO] SQLite write operation completed.\n"); // 打印最终操作结果
 	return 0;
 }
 
 
-int sqlite_read_1st(char *sqlite_path, int fd) 
+int sqlite_read_1st(sqlite3 *db, int fd) 
 {
-	sqlite3 		*db;
 	char			buf[256] = "";
 	char 			*errmsg = NULL;
 	char 			**result;
 	int 			rows, cols, rc;
 
-	// 打开数据库
-	rc = sqlite3_open(sqlite_path, &db);
-	if (rc != SQLITE_OK) 
-	{
-		fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		return -1;
-	}
-
+	
 	const char *selectSQL = 
 		"SELECT data FROM TempData ORDER BY timestamp ASC LIMIT 1;";
 
@@ -194,7 +170,6 @@ int sqlite_read_1st(char *sqlite_path, int fd)
 	{
 		fprintf(stderr, "SQL error: %s\n", errmsg);
 		sqlite3_free(errmsg);
-		sqlite3_close(db);
 		return -1;
 	}
 
@@ -203,9 +178,7 @@ int sqlite_read_1st(char *sqlite_path, int fd)
 
 	// 释放资源
 	sqlite3_free_table(result);
-	sqlite3_close(db);
 
-	
 	if( ( write(fd, buf, strlen(buf))) < 0 )
 	{
 		return -1;
@@ -216,20 +189,12 @@ int sqlite_read_1st(char *sqlite_path, int fd)
 
 
 
-int delete_1st_row(char* db_path, char* table_name) 
+int delete_1st_row(sqlite3 *db, char* table_name) 
 {
-		sqlite3* db = NULL;
-		char* error_message = NULL;
-		int rc;
-		rc = sqlite3_open(db_path, &db);	// 打开数据库
-		if (rc) 
-		{
-				fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-				sqlite3_close(db);
-				return -1;
-		}
-
+		char		*error_message = NULL;
+		int			rc = 0;
 		char sql_query[256];	// 构建 DELETE 语句
+		
 		snprintf(sql_query, sizeof(sql_query), "DELETE FROM %s WHERE id = (SELECT id FROM %s ORDER BY id ASC LIMIT 1);", table_name, table_name);
 
 		rc = sqlite3_exec(db, sql_query, NULL, NULL, &error_message);	// 执行 SQL 语句
@@ -237,12 +202,10 @@ int delete_1st_row(char* db_path, char* table_name)
 		{
 				fprintf(stderr, "SQL error: %s\n", error_message);
 				sqlite3_free(error_message);
-				sqlite3_close(db);
 				return -1;
 		}
 
 		printf("Row deleted successfully.\n");
-		sqlite3_close(db);   // 关闭数据库
 		return 0;
 }
 
@@ -252,20 +215,11 @@ int delete_1st_row(char* db_path, char* table_name)
 //问题原因：
 //默认查询未排序，可能导致数据读取顺序混乱
 
-int	sqlite_read(char *sqlite_path, char *output_file)
+int	sqlite_read(sqlite3 *db, char *output_file)
 {
-		sqlite3 	*db;
 		char 		*errMsg = NULL;
 		int 		rc = -1;
 		int 		line = 0;
-		// 打开数据库
-		rc = sqlite3_open(sqlite_path, &db);
-		if (rc) 
-		{
-				fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
-				sqlite3_close(db);
-				return -1;
-		}
 
 		// 查询数据
  		// 按时间戳排序查询
@@ -275,25 +229,20 @@ int	sqlite_read(char *sqlite_path, char *output_file)
 		if (rc != SQLITE_OK) 
 		{
 				fprintf(stderr, "SQL error: %s\n", sqlite3_errmsg(db));
-				sqlite3_close(db);
 				return -2;
 		}
 
 
 		//"w" 模式会覆盖原有文件内容，导致每次运行都清空文件。
 		//"a" 表示追加，可保留历史数据
-
 		FILE *fp = fopen(output_file, "w");
 		if (!fp) 
 		{
 				fprintf(stderr, "Failed to open output file: %s\n", strerror(errno));
 				sqlite3_finalize(stmt);
-				sqlite3_close(db);
 				return -3;
 		}
 	
-
-
 		while (sqlite3_step(stmt) == SQLITE_ROW) 
 		{
 				const unsigned char *text = sqlite3_column_text(stmt, 0);
@@ -305,7 +254,6 @@ int	sqlite_read(char *sqlite_path, char *output_file)
 		}
 	     	
 		sqlite3_finalize(stmt);
-		sqlite3_close(db);
 		fclose(fp);
 
 		return 0;
@@ -313,56 +261,34 @@ int	sqlite_read(char *sqlite_path, char *output_file)
 }
 
 
-int	sqlite_clear(char *sqlite_path)
+int sqlite_clear(sqlite3 *db)
 {
-	sqlite3 	*db;
-	char 		*errMsg = NULL;
-	int 		rc = -1;
+		char *errMsg = NULL;
+		int rc;
 
-	// 打开数据库
-	rc = sqlite3_open(sqlite_path, &db);
-	if (rc) 
-	{
-			fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
-			sqlite3_close(db);
-			return -1;
-	}
+		const char *deleteSQL = "DELETE FROM TempData;"; // 删除表中所有数据
+		rc = sqlite3_exec(db, deleteSQL, NULL, NULL, &errMsg);
+		if (rc != SQLITE_OK)
+		{
+				fprintf(stderr, "SQL error: %s\n", errMsg);
+				sqlite3_free(errMsg);
+				return -2;
+		}
 
-	const char *deleteSQL = "DELETE FROM TempData;";
-	rc = sqlite3_exec(db, deleteSQL, NULL, NULL, &errMsg);
-	if (rc != SQLITE_OK)
-	{
-			fprintf(stderr, "SQL error: %s\n", errMsg);
-			sqlite3_free(errMsg);
-			sqlite3_close(db);
-			return -2;
-	}
-
-	printf("[SUCCESS] 成功清空数据库 %s 中的临时数据\n", sqlite_path);  // 添加成功日志
-
-	// 关闭数据库
-	sqlite3_close(db);
-	return 0;	
+		printf("[SUCCESS] 成功清空数据库中的临时数据\n");
+		return 0;
 }
 
 
 
-
-int is_database_empty(const char *sqlite_path) 
+int is_database_empty(sqlite3 *db) 
 {
-		sqlite3 *db = NULL;
-		sqlite3_stmt *stmt = NULL;
-		int rc, result = -1;
+		sqlite3_stmt 		*stmt = NULL;
+		int 				rc = -1;
+		int					result = -1;
 
-		rc = sqlite3_open(sqlite_path, &db);
-		if (rc != SQLITE_OK) 
-		{
-				fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
-				return -1;
-	    }
 		
-
-		 //  检查 TempData 表是否存在
+		//  检查 TempData 表是否存在
 		const char *checkTableSQL = 
 			        "SELECT COUNT(*) FROM sqlite_master "
 					"WHERE type='table' AND name='TempData';";
@@ -416,7 +342,6 @@ int is_database_empty(const char *sqlite_path)
 		result = (row_count == 0) ? 1 : 0;
 cleanup:   
 		if (stmt) sqlite3_finalize(stmt);
-		if (db) sqlite3_close(db);
 		return result;
 }
 

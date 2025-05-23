@@ -31,6 +31,7 @@
 #include "socket.h"
 
 
+
 void handle_sigpipe(int sig) 
 {
 	    // 忽略 SIGPIPE 信号，不进行任何处理
@@ -54,11 +55,11 @@ int main(int argc, char **argv)
 
 		time_t 					start = 0;
 		time_t					end = 0;
-		sqlite3         		*db;
 		char					serial_number[32] = "";
 
 		char            		sqlite_path[128]="../sqlite3/Temp.db";
 		char					output_file[128]="../tmp/output.txt";
+		sqlite3					*db;
 
 		int 					mess_flage = 0;
 
@@ -105,7 +106,14 @@ int main(int argc, char **argv)
 				return -2;
 		}
 
-		if (create_table(sqlite_path) != 0) //创建temperature表
+		if(( db = sqlite_open(sqlite_path)) == NULL )
+		{
+				fprintf(stderr, "Failed to open sqlite.\n");
+				return -1;
+
+		}
+
+		if (create_table(db) != 0) //创建temperature表
 		{
 				fprintf(stderr, "Failed to create table.\n");
 				return -1;
@@ -144,7 +152,7 @@ int main(int argc, char **argv)
 								connfd = -1;
 								if( mess_flage == 1 )
 								{
-										sqlite_write(sqlite_path, w_message);
+										sqlite_write(db, w_message);
 								}	
 								continue;
 						}
@@ -160,7 +168,7 @@ int main(int argc, char **argv)
 						{
 								printf("Write data to server [%s:%d] failure: %s\n", server_ip, server_port, strerror(errno));
 	    						
-								sqlite_write(sqlite_path, w_message);	//发送失败，写入数据库
+								sqlite_write(db, w_message);	//发送失败，写入数据库
 								
 								close(connfd);
 								connfd = -1;
@@ -172,11 +180,11 @@ int main(int argc, char **argv)
 				}
 
 
-				if(!is_database_empty(sqlite_path))		//如果数据库非空
+				if(!is_database_empty(db))		//如果数据库非空
 				{
-						if( (sqlite_read_1st(sqlite_path, connfd)) == 0 )
+						if( (sqlite_read_1st(db, connfd)) == 0 )
 						{
-								delete_1st_row(sqlite_path, table_name);	//成功读取数据则删除缓存区
+								delete_1st_row(db, table_name);	//成功读取数据则删除缓存区
 						}
 				}
 		}

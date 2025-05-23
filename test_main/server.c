@@ -52,7 +52,7 @@ int main(int argc, char **argv)
 
 	
 	char                    sqlite_path[128]="/home/iot25/yangjiayu/Get-message/src/../sqlite3/Storage_temp.db";
-
+	sqlite3					*db;
 	struct option   opts[]={
 		{"port", required_argument, NULL, 'p'},     // -p 或 --port，需参数（端口号）
 	    {"help", no_argument, NULL, 'h'},           // -h 或 --help，无需参数
@@ -106,6 +106,22 @@ int main(int argc, char **argv)
 		printf("epoll add listen socket failure: %s\n", strerror(errno));
 		return -4;
 	}
+
+
+	if(( db = sqlite_open(sqlite_path)) == NULL )
+	{
+			fprintf(stderr, "Failed to open sqlite.\n");
+			return -1;
+
+	}
+
+
+	if (create_table(db) != 0) //创建temperature表
+	{
+			fprintf(stderr, "Failed to create table.\n");
+			return -1;
+	}
+
 
 	for( ; ; )
 	{
@@ -167,14 +183,14 @@ int main(int argc, char **argv)
 					
 				}	
 					
+				
+				printf("socket[%d] read %d bytes data: %s\n", event_array[i].data.fd, rv, buf);
 
-				if( (sqlite_write(sqlite_path, buf)) < 0 )     //上传数据存储到指定库文件里面
+				if( (sqlite_write(db, buf)) < 0 )     //上传数据存储到指定库文件里面
 				{
 						printf("Write to sqlite failure.\n");
 						return -2;
 				}
-
-				printf("socket[%d] read get %d bytes data: %s\n", event_array[i].data.fd, rv, buf);
 
 				if( (write(event_array[i].data.fd, buf, rv)) < 0 )
 				{
