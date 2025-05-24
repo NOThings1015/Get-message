@@ -81,9 +81,8 @@ int socket_server_init(char *listen_ip,int listen_port)
 }
 
 
-int socket_client_init(const char *server_ip, int server_port)
+int socket_client_init(const char *server_ip, int server_port, struct sockaddr_in *serv_addr)
 {
-	struct sockaddr_in      serv_addr;
 	int                     connfd;
 
 	connfd=socket(AF_INET, SOCK_STREAM, 0); 
@@ -93,17 +92,18 @@ int socket_client_init(const char *server_ip, int server_port)
 		return -1; 
 	}   
 
-	memset(&serv_addr, 0, sizeof(serv_addr));
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(server_port);
+	memset(serv_addr, 0, sizeof(struct sockaddr_in));
+	serv_addr->sin_family = AF_INET;
+	serv_addr->sin_port = htons(server_port);
 
-	if( inet_aton(server_ip, &serv_addr.sin_addr) == 0)  
+	if( inet_aton(server_ip, &serv_addr->sin_addr) == 0)  
 	{   
 		printf("Invalid IP address: %s\n", server_ip);
 		close(connfd);
 		return -2;                               
 	}   
 
+	/*
 	if( connect(connfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
 	{   
 		close(connfd);  
@@ -111,6 +111,8 @@ int socket_client_init(const char *server_ip, int server_port)
 	}   
 
 	printf("Client connect to server: [%s:%d]\n", server_ip, server_port); 
+	return connfd;
+	*/
 	return connfd;
 
 }

@@ -112,13 +112,32 @@ int send_message(int sockfd, const char *data, int length)
 							        
 				if (rv <= 0) 
 				{
-						return -1;
+						if (errno == EPIPE)
+						{
+
+								fprintf(stderr, "Write data to server failure: Broken pipe\n");
+						}
+			
+						else if (errno == ECONNRESET)
+						{
+
+								fprintf(stderr, "Write data to server failure: Connection reset by peer\n");
+						}
+						else if (errno == ENOTCONN)
+						{
+
+								fprintf(stderr, "Write data to server failure: Socket not connected\n");
+						}
+						else
+						{
+
+								perror("Failed to send message");
+						}
+						return -1; // 返回错误
 				}
 				
 				total_sent += rv;
-
 		}
-
 		return 0;
 	
 }

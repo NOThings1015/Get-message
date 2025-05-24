@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 
 	int 					i=0;
 	char					buf[200];
-	
+	char					ack[128];
 	int            		    serv_port=0;
 	int           		    ch=0;
 	int						listenfd;
@@ -191,15 +191,17 @@ int main(int argc, char **argv)
 						printf("Write to sqlite failure.\n");
 						return -2;
 				}
+				
+				//memset(ack, 0, sizeof(ack));
+				//snprintf(ack, sizeof(ack), "%s--ack", buf);
+				//if( (write(event_array[i].data.fd, ack, rv)) < 0 )
+				//{
+				//	printf("socket[%d] write failure: %s\n", event_array[i].data.fd, strerror(errno));
+				//	epoll_ctl(epollfd, EPOLL_CTL_DEL, event_array[i].data.fd, NULL);
+				//	close(event_array[i].data.fd);
+				//}
 
-				if( (write(event_array[i].data.fd, buf, rv)) < 0 )
-				{
-					printf("socket[%d] write failure: %s\n", event_array[i].data.fd, strerror(errno));
-					epoll_ctl(epollfd, EPOLL_CTL_DEL, event_array[i].data.fd, NULL);
-					close(event_array[i].data.fd);
-				}
-
-				//printf("Write to connfd : %s\n", buf);
+				//printf("Write to connfd : %s\n", ack);
 			}
 
 			

@@ -29,7 +29,7 @@
 #include "sqlite.h"
 #include "send.h"
 #include "socket.h"
-
+#include <netinet/tcp.h>
 
 
 void handle_sigpipe(int sig) 
@@ -48,7 +48,7 @@ int main(int argc, char **argv)
 		int             		connfd = -1;
 		char					*server_ip = NULL;
 		char					buf[1024];
-
+		char					ack[256] = "";
 		char					w_message[256] = "";
 		float					temp;
 		int						time_set;				//采样时间间隔(单位秒)
@@ -65,6 +65,9 @@ int main(int argc, char **argv)
 
 		int						rv = -1;
 		struct sockaddr_in		serv_addr;
+		int						error = 0;
+		socklen_t 				len = sizeof(error);
+
 
 		int    					conn_flag = 0;
 		char*					table_name = "TempData";
@@ -76,6 +79,14 @@ int main(int argc, char **argv)
 			{"help", no_argument, NULL, 'h'},           // -h 或 --help，无需参数
 			{NULL, 0, NULL, 0}                          // 结束标记
 		};
+		
+		struct tcp_info
+		{
+			    unsigned char tcpi_state;
+		};
+
+		struct tcp_info 		info;
+		socklen_t 				info_len = sizeof(info);
 
 		while((ch = getopt_long(argc, argv, "i:p:t:h", opts, NULL)) != -1)
 		{
@@ -146,7 +157,19 @@ int main(int argc, char **argv)
 				//断线重连
 				if(conn_flag == 0 )				
 				{
-						if( (connfd=socket_client_init(server_ip, server_port)) < 0) //若服务器连接失败，数据临时存储到sqlite数据库Temp.db的表TempData下
+						if(( connfd = socket_client_init(server_ip, server_port, &serv_addr)) < 0 )
+						{
+								printf("Client socket init failure\n");
+						}
+						
+				
+						if(connect(connfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0 )
+						{
+								//printf("Client connect to server: [%s:%d] failure\n", server_ip, server_port); 
+								close(connfd);
+						}
+						
+						if((getsockopt(connfd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) || (error != 0) )
 						{
 								close(connfd);
 								connfd = -1;
@@ -160,7 +183,22 @@ int main(int argc, char **argv)
 						conn_flag = 1;
 				}
 						
-				
+
+				// 在发送数据之前检查连接状态
+				if( (getsockopt(connfd, IPPROTO_TCP, TCP_INFO, &info, &info_len) < 0) || (info.tcpi_state != TCP_ESTABLISHED))
+				{
+						printf("getsockopt(TCP_INFO) failed");
+						close(connfd);
+						connfd = -1;
+						conn_flag = 0;
+						if (mess_flage == 1)
+						{
+								sqlite_write(db, w_message);
+						}
+						continue;
+				}
+
+
 				//上报数据					
 				if( mess_flage == 1 )		//如果有数据则发送
 				{
@@ -178,7 +216,6 @@ int main(int argc, char **argv)
 
 						printf("Send w_message: %s\n",w_message);
 				}
-
 
 				if(!is_database_empty(db))		//如果数据库非空
 				{

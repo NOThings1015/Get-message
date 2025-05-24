@@ -19,10 +19,10 @@
 #include <unistd.h>
 #include "sqlite.h"
 
-/*
+
 int main()
 {
-	char	sqlite_path[200]="/home/iot25/yangjiayu/Get-message/sqlite3/Temp.db";
+	char	sqlite_path[200]="/home/iot25/yangjiayu/Get-message/sqlite3/Storage_temp.db";
     char    message[20]="Hello!!!";
 
 	char*	table_name = "TempData";
@@ -35,12 +35,7 @@ int main()
 	db = sqlite_open(sqlite_path);
 	create_table(db);
 	
-	for(i=0;i<6;i++)
-	{
-		sqlite_write(db,message);
-
-	}
-	
+		
 	sqlite_read(db, output_file);
 
 	
@@ -60,10 +55,10 @@ int main()
 	}
 
 
-//	sqlite_clear(sqlite_path);
+	sqlite_clear(db);
 	return 0;
 }
-*/
+
 
 
 //时间戳去重机制
@@ -144,7 +139,7 @@ int	sqlite_write(sqlite3 *db, char *message)
 	}
 
 
-	printf("######[SUCCESS] Data written to SQLite: %s\n", message);  // 打印插入成功日志
+	printf("[SUCCESS] Data written to SQLite: %s\n", message);  // 打印插入成功日志
 	
 	sqlite3_finalize(stmt);
 	
@@ -174,7 +169,7 @@ int sqlite_read_1st(sqlite3 *db, int fd)
 	}
 
 
-	snprintf(buf,sizeof(buf),"%s\n", result[1]);
+	snprintf(buf,sizeof(buf),"%s", result[1]);
 
 	// 释放资源
 	sqlite3_free_table(result);
