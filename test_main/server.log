@@ -1,0 +1,30 @@
+
+2025-05-27 20:59:44.888046  INFO  logger.c:121: logger system(v0.1) start: file:"server.log", level:DEBUG, maxsize:1024KiB
+
+2025-05-27 20:59:44.888274  INFO  server.c:075: Logger initialized successfully.2025-05-27 20:59:44.888333  INFO  server.c:084: Server port set to: 88762025-05-27 20:59:44.888431  INFO  server.c:108: Server started and listening on port 88762025-05-27 20:59:44.890342  INFO  server.c:140: SQLite database initialized successfully.
+2025-05-27 20:59:57.099919  INFO  logger.c:121: logger system(v0.1) start: file:"server.log", level:DEBUG, maxsize:1024KiB
+
+2025-05-27 20:59:57.100114  INFO  server.c:075: Logger initialized successfully.2025-05-27 20:59:57.100153  INFO  server.c:084: Server port set to: 88762025-05-27 20:59:57.100248  INFO  server.c:108: Server started and listening on port 88762025-05-27 20:59:57.101711  INFO  server.c:140: SQLite database initialized successfully.2025-05-27 20:59:59.265282  INFO  server.c:183: New client connected: fd = 72025-05-27 20:59:59.265469  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 20:59:58: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:01.905114  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:01: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:04.865116  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:04: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:07.905143  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:07: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:10.865173  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:10: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:13.905136  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:13: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:16.875071  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:16: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:19.905104  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:19: 28-0317320a8aff, temperature: 27.625
+
+2025-05-27 21:00:34.800887  INFO  logger.c:121: logger system(v0.1) start: file:"server.log", level:DEBUG, maxsize:1024KiB
+
+2025-05-27 21:00:34.801042  INFO  server.c:075: Logger initialized successfully.2025-05-27 21:00:34.801101  INFO  server.c:084: Server port set to: 88762025-05-27 21:00:34.801198  INFO  server.c:108: Server started and listening on port 88762025-05-27 21:00:34.802571  INFO  server.c:140: SQLite database initialized successfully.2025-05-27 21:00:34.905205  INFO  server.c:183: New client connected: fd = 72025-05-27 21:00:34.905999  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:34: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:34.942720  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:22: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:34.957152  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:25: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:35.004042  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:28: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:35.019450  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:31: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:37.905112  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:37: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:40.865113  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:40: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:43.915070  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:43: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:46.865130  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:46: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:49.905100  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:49: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:00:51.693448  INFO  server.c:193: Client disconnected or read failure: fd = 72025-05-27 21:00:59.505279  INFO  server.c:183: New client connected: fd = 72025-05-27 21:00:59.505350  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:00:58: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:01:01.905105  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:01:01: 28-0317320a8aff, temperature: 27.625
+2025-05-27 21:01:04.865107  INFO  server.c:202: Received 58 bytes from client fd = 7: 2025-05-27 21:01:04: 28-0317320a8aff, temperature: 27.625

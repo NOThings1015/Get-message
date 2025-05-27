@@ -27,10 +27,14 @@
 #include "loca_time.h"
 #include "sqlite.h"
 #include "socket.h"
-
+#include "logger.h" 
 
 #define	 Max_event	512
+#define LOG_FILE "server.log"
+#define LOG_LEVEL LOG_LEVEL_DEBUG
 
+
+void Print_Server_Usage(char *progname);
 
 int main(int argc, char **argv)
 {
@@ -61,12 +65,23 @@ int main(int argc, char **argv)
 	
 	progname = basename(argv[0]);
 
+	// 初始化日志系统
+	if(log_open(LOG_FILE, LOG_LEVEL, 1024, LOG_LOCK_DISABLE) != 0)
+	{
+			fprintf(stderr, "Failed to initialize logger.\n");
+			return -1;
+	}
+
+	log_info("Logger initialized successfully.");
+
+
 	while((ch = getopt_long(argc, argv, "p:h", opts, NULL)) != -1) 
 	{
 		switch(ch)
 		{   
 			case 'p':
 					serv_port=atoi(optarg);      //若选项为 -p/--port，将参数值转换为整数并赋值给 port
+					log_info("Server port set to: %d", serv_port);
 					break;
 			case 'h':
 					Print_Server_Usage(argv[0]);   //若选项为 -h/--help，调用 print_usage 并返回 0。
@@ -79,23 +94,23 @@ int main(int argc, char **argv)
 
 	if(!serv_port)
 	{   
+		log_error("Invalid arguments. Please specify a port.");
 		Print_Server_Usage(argv[0]); 
 		return -1; 
 	}   
 
 	if( (listenfd=socket_server_init(NULL, serv_port)) < 0)   //创建服务器文件描述符socket
 	{
-		printf("Error: %s server listen on port %d failure\n", argv[0], serv_port);
+		log_error("Failed to start server on port %d: %s", serv_port, strerror(errno));
 		return -2;
 	}
 
-	printf(" %s server start to listen on port %d \n", argv[0], serv_port);
+	log_info("Server started and listening on port %d", serv_port);
 	
-
 
 	if( (epollfd=epoll_create(Max_event)) < 0) //创建epoll对象
 	{
-		printf("epoll_create() failure: %s\n", strerror(errno));
+		log_error("epoll_create() failure: %s", strerror(errno));
 		return -3;
 	}
 
@@ -103,14 +118,14 @@ int main(int argc, char **argv)
 	event.data.fd = listenfd;
 	if( epoll_ctl(epollfd, EPOLL_CTL_ADD, listenfd, &event) < 0) //向epoll对象中添加套接字listenfd
 	{
-		printf("epoll add listen socket failure: %s\n", strerror(errno));
+		log_error("Failed to add listen socket to epoll: %s", strerror(errno));
 		return -4;
 	}
 
 
 	if(( db = sqlite_open(sqlite_path)) == NULL )
 	{
-			fprintf(stderr, "Failed to open sqlite.\n");
+			log_error("Failed to open SQLite database: %s", sqlite_path);
 			return -1;
 
 	}
@@ -118,23 +133,24 @@ int main(int argc, char **argv)
 
 	if (create_table(db) != 0) //创建temperature表
 	{
-			fprintf(stderr, "Failed to create table.\n");
+			log_error("Failed to create table in database.");
 			return -1;
 	}
 
+	log_info("SQLite database initialized successfully.");
 
 	for( ; ; )
 	{
 		events = epoll_wait(epollfd, event_array, Max_event, -1);  //阻塞等待事件发生
 		if(events < 0)
 		{
-			printf("epoll failure: %s\n",strerror(errno));
+			log_error("epoll_wait failure: %s", strerror(errno));
 			break;
 		}
 
 		if(events == 0)
 		{
-			printf("epoll get timeout\n");
+			log_info("epoll_wait timeout.");
 			continue;
 		}
 
@@ -142,7 +158,7 @@ int main(int argc, char **argv)
 		{
 			if( (event_array[i].events&EPOLLERR) || (event_array[i].events&EPOLLHUP) )
 			{
-				printf("epoll_wait get error on fd[%d]: %s\n", event_array[i].data.fd, strerror(errno));
+				log_error("epoll_wait get error on fd[%d]: %s", event_array[i].data.fd, strerror(errno));
 				epoll_ctl(epollfd, EPOLL_CTL_DEL, event_array[i].data.fd, NULL);
 				close(event_array[i].data.fd);
 			}
@@ -151,7 +167,7 @@ int main(int argc, char **argv)
 			{
 				if( (connfd=accept(listenfd, (struct sockaddr *)NULL, NULL)) < 0)
 				{
-					printf("accept new client failure: %s\n", strerror(errno));
+					log_error("Failed to accept new client: %s", strerror(errno));
 					continue;
 				}
 
@@ -160,60 +176,57 @@ int main(int argc, char **argv)
 				
 				if( epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &event) < 0)
 				{
-					printf("epoll add client socket failure: %s\n", strerror(errno));
+					log_error("Failed to add client socket to epoll: %s", strerror(errno));
 					close(event_array[i].data.fd);
 					continue;
 				}
-				printf("epoll add new client socket[%d] ok.\n", connfd);
-
+				log_info("New client connected: fd = %d", connfd);
 			}
-			
-
 
 			else  //已连接的客户端有数据收发
 			{
 
-				memset(buf, 0, sizeof(buf));
-
-				if( (rv=read(event_array[i].data.fd, buf, sizeof(buf))) <= 0 )
-				{
-					printf("socket[%d] read failure or get disconnect and will be removed.\n", event_array[i].data.fd);
-					epoll_ctl(epollfd, EPOLL_CTL_DEL, event_array[i].data.fd, NULL);
-					close(event_array[i].data.fd);
+					memset(buf, 0, sizeof(buf));
+	
+					if( (rv=read(event_array[i].data.fd, buf, sizeof(buf))) <= 0 )
+					{
+							log_info("Client disconnected or read failure: fd = %d", event_array[i].data.fd);
+							epoll_ctl(epollfd, EPOLL_CTL_DEL, event_array[i].data.fd, NULL);
+							close(event_array[i].data.fd);
 					
-				}	
+					}	
 					
-				
-				printf("socket[%d] read %d bytes data: %s\n", event_array[i].data.fd, rv, buf);
 
-				if( (sqlite_write(db, buf)) < 0 )     //上传数据存储到指定库文件里面
-				{
-						printf("Write to sqlite failure.\n");
-						return -2;
-				}
+					else
+					{
+							log_info("Received %d bytes from client fd = %d: %s", rv, event_array[i].data.fd, buf);
+							if( (sqlite_write(db, buf)) < 0 )     //上传数据存储到指定库文件里面
+							{
+									log_error("Failed to write to SQLite database.");
+									return -2;
+							}
 				
-				//memset(ack, 0, sizeof(ack));
-				//snprintf(ack, sizeof(ack), "%s--ack", buf);
-				//if( (write(event_array[i].data.fd, ack, rv)) < 0 )
-				//{
-				//	printf("socket[%d] write failure: %s\n", event_array[i].data.fd, strerror(errno));
-				//	epoll_ctl(epollfd, EPOLL_CTL_DEL, event_array[i].data.fd, NULL);
-				//	close(event_array[i].data.fd);
-				//}
-
-				//printf("Write to connfd : %s\n", ack);
-			}
+					}
 
 			
+			}
+	
 		}
 	}
 CleanUp:
 	close(listenfd);
+	sqlite3_close(db);
+	log_info("Server shutting down.");
+	log_close();
 	return 0;
 }
 				
 
 
-
-
+void Print_Server_Usage(char *progname)
+{
+		log_info("%s usage method:", progname);
+		log_info("-p(--port): Specify server port to listen on.");
+		log_info("-h(--help): Print this help information.");
+}
 

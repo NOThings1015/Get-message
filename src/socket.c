@@ -118,28 +118,3 @@ int socket_client_init(const char *server_ip, int server_port, struct sockaddr_i
 }
 
 
-
-void Print_Client_Usage(char *progname)
-{
-	printf("%s usage method:\n",progname);
-	printf("-i(--ip): Specify server IP address to connect.\n");
-	printf("-p(--port): Specify server port to connect.\n");
-	printf("-t(--time): Client message sending interva.\n"); 
-	printf("-h(--help): Printf this help information.\n");
-	return ;
-}
-
-
-
-void Print_Server_Usage(char *progname)
-{
-	printf("%s usage method:\n",progname);
-	printf("-p(--port):sepcify serveer listen port.\n");    
-	printf("-h(--help):printf this help information.\n");
-	return ;
-}
-
-
-
-
-
