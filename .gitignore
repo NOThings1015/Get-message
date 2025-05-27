@@ -1,7 +1,18 @@
+# 忽略临时文件和编译生成的文件
+*.o
+*.out
 *.so
 *.a
+*.in.out
+*.po.out
 *.db
-tmp/
+*.log
+*.log.bak
+*.txt
 
-lib/*.so
-lib/*.a
+#忽略特定目录
+/tmp/
+/test_main/*.log
+/test_main/*.log.bak
+/test_main/test_client
+/test_main/test_server
