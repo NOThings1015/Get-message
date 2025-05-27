@@ -86,11 +86,6 @@ int main(int argc, char **argv)
 			{NULL, 0, NULL, 0}                          // 结束标记
 		};
 		
-		struct tcp_info
-		{
-			    unsigned char tcpi_state;
-		};
-
 		struct tcp_info 		info;
 		socklen_t 				info_len = sizeof(info);
 
@@ -167,12 +162,12 @@ int main(int argc, char **argv)
 						{
 								start = end;
 								mess_flage = 1;
-								log_info("Generated sensor message: %s", w_message);
+								log_info("Get temperature message: %s", w_message);
 						}
 
 						else
 						{
-								log_error("Failed to generate sensor message.");
+								log_error("Failed to get temperature message.");
 						}
 				}
 
@@ -189,7 +184,7 @@ int main(int argc, char **argv)
 				
 						if(connect(connfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0 )
 						{
-								 log_error("Failed to connect to server: [%s:%d]", server_ip, server_port); 
+								log_error("Failed to connect to server: [%s:%d]", server_ip, server_port); 
 								close(connfd);
 								connfd = -1;
 								if( mess_flage == 1 )
