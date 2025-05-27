@@ -11,10 +11,8 @@
  *                 
  ********************************************************************************/
 #ifndef	SQLITE_H_
-
-#include <sqlite3.h>
 #define	SQLITE_H_
-
+#include <sqlite3.h>
 extern 	int sqlite_write(sqlite3 *db, char *message);	//写入数据到指定的数据库
 extern	int sqlite_read(sqlite3 *db, char *output_file);//读取指定数据库中的数据,将数据写入文件
 extern	int sqlite_clear(sqlite3 *db);   				//清除指定数据库中的数据

@@ -10,7 +10,6 @@
  *      ChangeLog:  1, Release initial version on "09/04/25 16:33:31"
  *                 
  ********************************************************************************/
-
 #include <sqlite3.h>
 #include <sys/stat.h>
 #include <stdio.h>

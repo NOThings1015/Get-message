@@ -21,7 +21,6 @@
 #include <arpa/inet.h>
 #include <fcntl.h>  // 用于 fileno 和 ftruncate
 #include <time.h>   // 用于 sleep
-#include <sqlite3.h>
 #include "sqlite.h"
 
 
