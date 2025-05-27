@@ -167,11 +167,6 @@ int main(int argc, char **argv)
 						{
 								//printf("Client connect to server: [%s:%d] failure\n", server_ip, server_port); 
 								close(connfd);
-						}
-						
-						if((getsockopt(connfd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) || (error != 0) )
-						{
-								close(connfd);
 								connfd = -1;
 								if( mess_flage == 1 )
 								{
