@@ -182,7 +182,7 @@ int main(int argc, char **argv)
 				// 在发送数据之前检查连接状态
 				if( (getsockopt(connfd, IPPROTO_TCP, TCP_INFO, &info, &info_len) < 0) || (info.tcpi_state != TCP_ESTABLISHED))
 				{
-						printf("getsockopt(TCP_INFO) failed");
+						printf("getsockopt(TCP_INFO) failed\n");
 						close(connfd);
 						connfd = -1;
 						conn_flag = 0;
