@@ -19,47 +19,6 @@
 #include "sqlite.h"
 
 
-int main()
-{
-	char	sqlite_path[200]="/home/iot25/yangjiayu/Get-message/sqlite3/Storage_temp.db";
-    char    message[20]="Hello!!!";
-
-	char*	table_name = "TempData";
-
-	char    output_file[128] = "/home/iot25/yangjiayu/Get-message/tmp/output_file.txt";
-	int     i=0;
-
-	sqlite3 *db;
-
-	db = sqlite_open(sqlite_path);
-	create_table(db);
-	
-		
-	sqlite_read(db, output_file);
-
-	
-	int fd = STDOUT_FILENO; // 使用标准输出文件描述符
-
-	// 调用封装函数
-	if (sqlite_read_1st(db, fd) == 0)
-	{
-		printf("Data successfully read and written to file descriptor.\n");
-
-		delete_1st_row(db, table_name);
-	}
-
-	else 
-	{
-		fprintf(stderr, "Failed to read data from database.\n");
-	}
-
-
-	sqlite_clear(db);
-	return 0;
-}
-
-
-
 //时间戳去重机制
 //问题原因：
 //若客户端断线期间多次写入相同数据，服务器无法识别重复消息。
@@ -68,6 +27,12 @@ sqlite3 *sqlite_open(char *sqlite_path)
 		sqlite3 *db;
     	char *errMsg = NULL;
     	int rc;
+		
+		const char *createTableSQL = "CREATE TABLE IF NOT EXISTS TempData ("
+                                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+								"timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, "  // 新增时间戳字段
+                                "data TEXT NOT NULL);";
+
 
     	rc = sqlite3_open(sqlite_path, &db);
     	if (rc) 
@@ -77,29 +42,16 @@ sqlite3 *sqlite_open(char *sqlite_path)
        			return NULL;
     	}
 
-		return db;
-}
+    	rc = sqlite3_exec(db, createTableSQL, NULL, NULL, &errMsg);
+    	if (rc != SQLITE_OK) 
+		{
+	    	    fprintf(stderr, "SQL error: %s\n", errMsg);
+    		   	sqlite3_free(errMsg);
+        		sqlite3_close(db);
+       			return NULL;
+    	}
 
-int create_table(sqlite3 *db) 
-{
-    char *errMsg = NULL;
-    int rc;
-
-    const char *createTableSQL = "CREATE TABLE IF NOT EXISTS TempData ("
-                                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-								"timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, "  // 新增时间戳字段
-                                "data TEXT NOT NULL);";
-
-    rc = sqlite3_exec(db, createTableSQL, NULL, NULL, &errMsg);
-    if (rc != SQLITE_OK) 
-	{
-	        fprintf(stderr, "SQL error: %s\n", errMsg);
-    	    sqlite3_free(errMsg);
-        	sqlite3_close(db);
-       		return -2;
-    }
-
-    return 0;
+    	return db;
 }
 
 
@@ -147,13 +99,12 @@ int	sqlite_write(sqlite3 *db, char *message)
 }
 
 
-int sqlite_read_1st(sqlite3 *db, int fd) 
+int sqlite_read_1st(sqlite3 *db, char *buf, int buf_size) 
 {
-	char			buf[256] = "";
 	char 			*errmsg = NULL;
 	char 			**result;
 	int 			rows, cols, rc;
-
+	int				len = 0;
 	
 	const char *selectSQL = 
 		"SELECT data FROM TempData ORDER BY timestamp ASC LIMIT 1;";
@@ -167,16 +118,14 @@ int sqlite_read_1st(sqlite3 *db, int fd)
 		return -1;
 	}
 
-
-	snprintf(buf,sizeof(buf),"%s", result[1]);
-
+	snprintf(buf, buf_size,"%s", result[1]);
+	if( (len < 0) || (len >= buf_size) )
+	{
+			fprintf(stderr, "Message formatting failed\n");
+			return -2;
+	}
 	// 释放资源
 	sqlite3_free_table(result);
-
-	if( ( write(fd, buf, strlen(buf))) < 0 )
-	{
-		return -1;
-	}
 
 	return 0;
 }

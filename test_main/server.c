@@ -30,9 +30,6 @@
 #include "logger.h" 
 
 #define	 Max_event	512
-#define LOG_FILE "server.log"
-#define LOG_LEVEL LOG_LEVEL_DEBUG
-
 
 void Print_Server_Usage(char *progname);
 
@@ -54,7 +51,10 @@ int main(int argc, char **argv)
 	struct epoll_event		event_array[Max_event];
 	int						events;
 
-	
+	char                    *log_file = "server.log";
+	int                     log_level = LOG_LEVEL_DEBUG;
+	int                     log_size = 1024;
+
 	char                    sqlite_path[128]="/home/iot25/yangjiayu/Get-message/src/../sqlite3/Storage_temp.db";
 	sqlite3					*db;
 	struct option   opts[]={
@@ -66,7 +66,7 @@ int main(int argc, char **argv)
 	progname = basename(argv[0]);
 
 	// 初始化日志系统
-	if(log_open(LOG_FILE, LOG_LEVEL, 1024, LOG_LOCK_DISABLE) != 0)
+	if (log_open(log_file, log_level, 1024, LOG_LOCK_DISABLE) != 0)
 	{
 			fprintf(stderr, "Failed to initialize logger.\n");
 			return -1;
@@ -126,14 +126,6 @@ int main(int argc, char **argv)
 	if(( db = sqlite_open(sqlite_path)) == NULL )
 	{
 			log_error("Failed to open SQLite database: %s", sqlite_path);
-			return -1;
-
-	}
-
-
-	if (create_table(db) != 0) //创建temperature表
-	{
-			log_error("Failed to create table in database.");
 			return -1;
 	}
 

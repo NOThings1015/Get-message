@@ -33,13 +33,8 @@
 #include "socket.h"
 #include "logger.h"
 
-
-#define LOG_FILE "client.log"
-#define LOG_LEVEL LOG_LEVEL_DEBUG
-
 void handle_sigpipe(int sig) 
 {
-	    // 忽略 SIGPIPE 信号，不进行任何处理
 		log_info("SIGPIPE signal received, ignoring...");    
 		return;
 
@@ -54,17 +49,15 @@ int main(int argc, char **argv)
 		int             		connfd = -1;
 		char					*server_ip = NULL;
 		char					buf[1024];
-		char					ack[256] = "";
 		char					w_message[256] = "";
 		float					temp;
 		int						time_set;				//采样时间间隔(单位秒)
 
-		time_t 					start = 0;
-		time_t					end = 0;
+		time_t 					last_time = 0;
+		time_t					current_time = 0;
 		char					serial_number[32] = "";
 
 		char            		sqlite_path[128]="../sqlite3/Temp.db";
-		char					output_file[128]="../tmp/output.txt";
 		sqlite3					*db;
 
 		int 					mess_flage = 0;
@@ -89,15 +82,20 @@ int main(int argc, char **argv)
 		struct tcp_info 		info;
 		socklen_t 				info_len = sizeof(info);
 
-	
+		
+		char 					*log_file = "client.log";
+		int 					log_level = LOG_LEVEL_DEBUG;
+		int 					log_size = 1024;
+		
+		char					serimal_number[32] = "DS18B20_001";
+
+
 		// 初始化日志系统
-		if (log_open(LOG_FILE, LOG_LEVEL, 1024, LOG_LOCK_DISABLE) != 0)
+		if (log_open(log_file, log_level, 1024, LOG_LOCK_DISABLE) != 0)
 		{
 			fprintf(stderr, "Failed to initialize logger.\n");
 			return -1;
 		}
-
-		log_info("Logger initialized successfully.");
 
 		//命令行参数解析
 		while((ch = getopt_long(argc, argv, "i:p:t:h", opts, NULL)) != -1)
@@ -137,13 +135,6 @@ int main(int argc, char **argv)
 		{
 				log_error("Failed to open SQLite database: %s", sqlite_path);
 				return -1;
-
-		}
-
-		if (create_table(db) != 0) //创建temperature表
-		{
-				log_error("Failed to create table in database.");
-				return -1;
 		}   
 
 		signal(SIGPIPE, handle_sigpipe); // 捕获 SIGPIPE 信号					
@@ -154,13 +145,13 @@ int main(int argc, char **argv)
 
 				//单位时间采样：
 				mess_flage = 0;
-				time(&end);    
-				if( (difftime(end, start) >= time_set ))
+				time(&current_time);    
+				if( (difftime(current_time, last_time) >= time_set ))
 				{
 						memset(w_message, 0, sizeof(w_message));
-						if (generate_sensor_message(w_message, sizeof(w_message)) == 0)	
+						if (generate_sensor_message(serial_number, w_message, sizeof(w_message)) == 0)	
 						{
-								start = end;
+								last_time = current_time;
 								mess_flage = 1;
 								log_info("Get temperature message: %s", w_message);
 						}
@@ -169,6 +160,16 @@ int main(int argc, char **argv)
 						{
 								log_error("Failed to get temperature message.");
 						}
+				}
+
+
+				// 在发送数据之前检查连接状态
+				if( (getsockopt(connfd, IPPROTO_TCP, TCP_INFO, &info, &info_len) < 0) || (info.tcpi_state != TCP_ESTABLISHED))
+				{
+						log_error("Connection lost. Reconnecting...");
+						close(connfd);
+						connfd = -1;
+						conn_flag = 0;
 				}
 
 
@@ -200,22 +201,6 @@ int main(int argc, char **argv)
 				}
 						
 
-				// 在发送数据之前检查连接状态
-				if( (getsockopt(connfd, IPPROTO_TCP, TCP_INFO, &info, &info_len) < 0) || (info.tcpi_state != TCP_ESTABLISHED))
-				{
-						log_error("Connection lost. Reconnecting...");
-						close(connfd);
-						connfd = -1;
-						conn_flag = 0;
-						if (mess_flage == 1)
-						{
-								sqlite_write(db, w_message);
-								log_info("Message stored in database due to connection failure.");
-						}
-						continue;
-				}
-
-
 				//上报数据					
 				if( mess_flage == 1 )		//如果有数据则发送
 				{
@@ -235,13 +220,39 @@ int main(int argc, char **argv)
 						mess_flage = 0;
 				}
 
-				if(!is_database_empty(db))		//如果数据库非空
+  			
+				//发送清空数据库中数据
+				if(!is_database_empty(db))		
 				{
-						if( (sqlite_read_1st(db, connfd)) == 0 )
+						//读取数据库第一行
+						if ( (sqlite_read_1st(db, w_message, sizeof(w_message))) <  0 )
 						{
-								delete_1st_row(db, table_name);	//成功读取数据则删除缓存区
-								log_info("First row deleted from database.");
+								log_error("Failed to get message from sqlite: %s", sqlite_path);
+								continue;
 						}
+				
+						mess_flage = 1;
+						//发送读取的数据
+						if (send_message(connfd, w_message, strlen(w_message)) < 0) //发送当前数据
+						{
+								log_error("Failed to send message to server: [%s:%d]", server_ip, server_port);
+	    						
+								close(connfd);
+								connfd = -1;
+								conn_flag = 0;
+								continue; // 跳出内层循环，触发重连
+						}	
+
+						mess_flage = 0;
+						log_info("Message sent successfully: %s", w_message);
+
+						//删除数据库中已发送的数据
+						if ( delete_1st_row(db, table_name) < 0 )  	//成功读取数据则删除缓存区
+						{
+								log_error("Failed to delete message from sqlite: %s", sqlite_path);
+						}
+
+						log_info("First row deleted from database.");
 				}
 		}
 
@@ -263,16 +274,4 @@ void Print_Client_Usage(char *progname)
 		log_info("-t(--time): Client message sending interval.");
 		log_info("-h(--help): Print this help information.");
 }
-
-/*  
-void Print_Client_Usage(char *progname)
-{
-		printf("%s usage method:\n",progname);
-		printf("-i(--ip): Specify server IP address to connect.\n");
-		printf("-p(--port):	Specify server port to connect.\n");
-		printf("-t(--time):	Client message sending interva.\n"); 
-		printf("-h(--help):	Printf this help information.\n");
-		return ;
-}
-*/
 

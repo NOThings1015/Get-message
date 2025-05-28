@@ -21,31 +21,36 @@
 #include <stdlib.h>
 
 #include "loca_time.h"
+#include "ds18b20.h"
 
 #define buf_size 200
 
-int  get_ds18b20(char *serial_number, int buffer_size, float *temp);
 
-
-int generate_sensor_message(char *buffer, size_t buffer_size)
+int generate_sensor_message(char *serial_number, char *buffer, int buffer_size)
 {
 		int 		mes_size = buffer_size; // 使用传入的缓冲区大小
 		char 		time[52];              // 时间缓冲区
-		char 		serial_number[32];     // 设备号缓冲区
 		float 		temp;                 // 温度值
 		int 		len;
 		
+		int 		rv = 0;
 		if (get_time(time, sizeof(time)) < 0)
 		{
 				fprintf(stderr, "Get time failure.\n");
 				return -1; // 返回错误码
 		}
 
-
-		if (get_ds18b20(serial_number, sizeof(serial_number), &temp) < 0)
+		if ( (rv =get_custom_serial(serial_number, buffer_size)) < 0 )
+		{
+				printf("Get custom serial number failured\n");
+				printf("LLLLLLLL:%d\n",rv);
+				return -1;
+		}
+	
+		if (get_ds18b20_tmp(serial_number, &temp) < 0 )
 		{
 				fprintf(stderr, "ds18b20 get temperature failure: %s\n", strerror(errno));
-			return -1; // 返回错误码
+				return -1; // 返回错误码
 		}
 
 		len = snprintf(buffer, mes_size, "%s: %s, temperature: %.3f\n", time, serial_number, temp);
@@ -57,99 +62,150 @@ int generate_sensor_message(char *buffer, size_t buffer_size)
 				return -1; // 返回错误码
 
 		}
-
-		return 0; // 成功返回0
+		return 0;
 }
 
 
 
-int  get_ds18b20(char *serial_number, int buffer_size, float *temp)
+int  get_ds18b20_tmp(char *serial_number, float *temp)
 {
-	int					fd = -1;
-	char				buf[buf_size];
-	char				*ptr;
+	FILE 			*fp = NULL;
+	char 			line[256] = {0};
+	char 			saved_serial[32] = {0};
+	char 			physical_serial[64] = {0};
+	char 			path[256] = {0};
+	int 			fd = -1;
+	char 			buf[1024] = {0};
+	ssize_t 		len = 0;
+	char 			*ptr = NULL;
+	char	 		*config_file = "/home/iot25/yangjiayu/Get-message/etc/ds18b20.conf";
+	
 
-	char    			w1_path[64] = "/sys/bus/w1/devices/";
-	DIR					*dirp = NULL;
-	struct dirent		*direntp = NULL;		
-
-	int					found = 0;
-	char				device_path[200] = ""; //存放数据所在文件夹
-//	char				chip_path[32]="";   //存放产品序列号
-
-	if( (dirp = opendir(w1_path)) == NULL )  //按路径打开文件夹，获取DIR句柄
+	//参数检查
+	if (serial_number == NULL || temp == NULL) 
 	{
-		printf("open folder %s failure: %s\n", w1_path, strerror(errno));
-		return -1;
+			return -1;
 	}
 
-	while( !found )
+	if ((fp = fopen(config_file, "r")) == NULL )
 	{
-		if( (direntp=readdir(dirp)) != NULL )  //遍历路径下所有文件
-		{
-			//printf("failname: %s\n", direntp->d_name);  //可用于打印目录文件
-		
-			if( strstr(direntp->d_name, "28-") )  //找到ds18b20数据所在文件
-			{
-				found = 1;	
-			}
-		}
-
-		else
-			break;
-	}
-
-	if( !found )
-	{
-		printf("Can not found ds18b20 message.\n");
 		return -2;
 	}
-		
-	
-	strncpy(serial_number, direntp->d_name, buffer_size - 1);
-	serial_number[buffer_size - 1] = '\0';  // 强制终止
 
-    snprintf(device_path, sizeof(device_path), "%s%s/w1_slave", w1_path, direntp->d_name); //将文件拼接完整
-     
-	//printf("device_path:%s\n",device_path);		//ds18b20完整路径
-	 
-
-	if( (fd = open(device_path, O_RDONLY)) < 0 ) //打开文件 
+	while (fgets(line, sizeof(line), fp) != NULL) 
 	{
-		printf("open fail %s failure: %s\n", device_path, strerror(errno));
-		return -3;
-    }   
-	
-	memset(buf, 0, sizeof(buf));
+		if (sscanf(line, "%s %s", saved_serial, physical_serial) == 2) 
+		{
+			if (strcmp(saved_serial, serial_number) == 0)
+			{
+				fclose(fp);
+		 		snprintf(path, sizeof(path), "/sys/bus/w1/devices/%s/w1_slave", physical_serial);
+		 		if( (fd = open(path, O_RDONLY)) < 0 )
+				{
+						 return -3;
+				}
+		 		memset(buf, 0, sizeof(buf));
+				if( (len = read(fd, buf, sizeof(buf))) <= 0 )
+				{
+						 close(fd);
+						 return -4;
+				}
 
-	if( read(fd, buf, sizeof(buf)) < 0 )  //读取文件数据
-	{
-		printf("read data from fd=%d failure: %s\n", fd, strerror(errno));
-	 	return -4;
+				if( (ptr = strstr(buf, "t=")) == NULL) 
+				{
+			 			return -5;
+				}
+			
+				ptr += 2;
+				*temp = atof(ptr)/1000;
+				
+				return 0;
+			}
+		}
 	}
 
-	//printf("Get buf: %s\n", buf);
-
-	ptr = strstr(buf, "t="); 		//找到温度数据位置
-	if( !ptr )
-	{
-		printf("Can not find t= string\n");
-		return -5;
-	}
-
-	ptr += 2;
-
-	*temp = atof(ptr)/1000;
-	//printf("Get temprature:  %.3f\n", temp); //打印温度
-
-	closedir(dirp);
-	return 0;
+	fclose(fp);
+	return -6;
 }
 
 
 
 
+int get_custom_serial(char *serial_number, int buffer_size)
+{
+		char 				first_device[64] = {0};
+		FILE				 *fp = NULL;
+		char 				line[256] = {0};
+		DIR 				*dirp = NULL;
+		struct 				dirent *direntp = NULL;
+		char 				physical_serial[64] = {0};
+		int 				written = 0;
+		static int 			counter = 1;
+		const char 			*config_file = "/home/iot25/yangjiayu/Get-message/etc/ds18b20.conf";
+		const int 			min_serial_size = 12;
 
+		
+		if (serial_number == NULL || buffer_size < min_serial_size) 
+		{
+			     return -1;
+		}
+
+		// 如果配置文件存在，直接读取
+		fp = fopen(config_file, "r");
+		if(fp != NULL) 
+		{
+				while( (fgets(line, sizeof(line), fp)) != NULL ) 
+				{
+						if(sscanf(line, "%s", serial_number) == 1)
+						{
+								fclose(fp);		
+								return 0;
+						}
+				}
+
+				fclose(fp);
+		}
+
+		// 否则自动检测第一个DS18B20设备并创建配置
+		if((dirp = opendir("/sys/bus/w1/devices/")) == NULL) 
+		{
+				return -2;
+		}
+
+		while((direntp = readdir(dirp)) != NULL) 
+		{
+				if(strstr(direntp->d_name, "28-"))
+				{
+						strncpy(physical_serial, direntp->d_name, sizeof(physical_serial)-1);
+						break;
+				}	
+		}
+	
+		closedir(dirp);
+
+		if(physical_serial[0] == '\0') 
+		{
+				return -3;
+		}
+
+		// 生成自定义序列号 (例如: DS18B20_001)
+		if ( snprintf(serial_number, buffer_size, "DS18B20_%03d", counter++) < 0 )
+		{
+				return -4;
+		}
+
+		printf("%s\n",serial_number);
+		// 保存到配置文件
+		if( (fp = fopen(config_file, "w")) == NULL )
+		{
+				return -5;
+		}
+	
+		fprintf(fp, "%s %s\n", serial_number, physical_serial);
+		fclose(fp);
+
+		return 0;
+}
 
 
 
