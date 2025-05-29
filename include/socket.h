@@ -22,5 +22,6 @@ extern void Print_Client_Usage(char *progname); //客户端使用方法
 
 extern void Print_Server_Usage(char *progname); //服务器使用方法
 
+extern int socket_connected( int *connfd );
 #endif
 

@@ -59,17 +59,17 @@ int main(int argc, char **argv)
 	sqlite3					*db;
 	struct option   opts[]={
 		{"port", required_argument, NULL, 'p'},     // -p 或 --port，需参数（端口号）
-	    {"help", no_argument, NULL, 'h'},           // -h 或 --help，无需参数
-        {NULL, 0, NULL, 0}                          // 结束标记
-    };  
-	
+		{"help", no_argument, NULL, 'h'},           // -h 或 --help，无需参数
+		{NULL, 0, NULL, 0}                          // 结束标记
+	};  
+
 	progname = basename(argv[0]);
 
 	// 初始化日志系统
 	if (log_open(log_file, log_level, 1024, LOG_LOCK_DISABLE) != 0)
 	{
-			fprintf(stderr, "Failed to initialize logger.\n");
-			return -1;
+		fprintf(stderr, "Failed to initialize logger.\n");
+		return -1;
 	}
 
 	log_info("Logger initialized successfully.");
@@ -80,15 +80,15 @@ int main(int argc, char **argv)
 		switch(ch)
 		{   
 			case 'p':
-					serv_port=atoi(optarg);      //若选项为 -p/--port，将参数值转换为整数并赋值给 port
-					log_info("Server port set to: %d", serv_port);
-					break;
+				serv_port=atoi(optarg);      //若选项为 -p/--port，将参数值转换为整数并赋值给 port
+				log_info("Server port set to: %d", serv_port);
+				break;
 			case 'h':
-					Print_Server_Usage(argv[0]);   //若选项为 -h/--help，调用 print_usage 并返回 0。
-					return -1; 
+				Print_Server_Usage(argv[0]);   //若选项为 -h/--help，调用 print_usage 并返回 0。
+				return -1; 
 			default:
-					Print_Server_Usage(argv[0]); 
-					break;
+				Print_Server_Usage(argv[0]); 
+				break;
 		}   
 	}   
 
@@ -106,7 +106,7 @@ int main(int argc, char **argv)
 	}
 
 	log_info("Server started and listening on port %d", serv_port);
-	
+
 
 	if( (epollfd=epoll_create(Max_event)) < 0) //创建epoll对象
 	{
@@ -125,8 +125,8 @@ int main(int argc, char **argv)
 
 	if(( db = sqlite_open(sqlite_path)) == NULL )
 	{
-			log_error("Failed to open SQLite database: %s", sqlite_path);
-			return -1;
+		log_error("Failed to open SQLite database: %s", sqlite_path);
+		return -1;
 	}
 
 	log_info("SQLite database initialized successfully.");
@@ -165,7 +165,7 @@ int main(int argc, char **argv)
 
 				event.data.fd = connfd;
 				event.events = EPOLLIN|EPOLLOUT;
-				
+
 				if( epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &event) < 0)
 				{
 					log_error("Failed to add client socket to epoll: %s", strerror(errno));
@@ -178,31 +178,31 @@ int main(int argc, char **argv)
 			else  //已连接的客户端有数据收发
 			{
 
-					memset(buf, 0, sizeof(buf));
-	
-					if( (rv=read(event_array[i].data.fd, buf, sizeof(buf))) <= 0 )
-					{
-							log_info("Client disconnected or read failure: fd = %d", event_array[i].data.fd);
-							epoll_ctl(epollfd, EPOLL_CTL_DEL, event_array[i].data.fd, NULL);
-							close(event_array[i].data.fd);
-					
-					}	
-					
+				memset(buf, 0, sizeof(buf));
 
-					else
+				if( (rv=read(event_array[i].data.fd, buf, sizeof(buf))) <= 0 )
+				{
+					log_info("Client disconnected or read failure: fd = %d", event_array[i].data.fd);
+					epoll_ctl(epollfd, EPOLL_CTL_DEL, event_array[i].data.fd, NULL);
+					close(event_array[i].data.fd);
+
+				}	
+
+
+				else
+				{
+					log_info("Received %d bytes from client fd = %d: %s", rv, event_array[i].data.fd, buf);
+					if( (sqlite_write(db, buf)) < 0 )     //上传数据存储到指定库文件里面
 					{
-							log_info("Received %d bytes from client fd = %d: %s", rv, event_array[i].data.fd, buf);
-							if( (sqlite_write(db, buf)) < 0 )     //上传数据存储到指定库文件里面
-							{
-									log_error("Failed to write to SQLite database.");
-									return -2;
-							}
-				
+						log_error("Failed to write to SQLite database.");
+						return -2;
 					}
 
-			
+				}
+
+
 			}
-	
+
 		}
 	}
 CleanUp:
@@ -212,13 +212,13 @@ CleanUp:
 	log_close();
 	return 0;
 }
-				
+
 
 
 void Print_Server_Usage(char *progname)
 {
-		log_info("%s usage method:", progname);
-		log_info("-p(--port): Specify server port to listen on.");
-		log_info("-h(--help): Print this help information.");
+	log_info("%s usage method:", progname);
+	log_info("-p(--port): Specify server port to listen on.");
+	log_info("-h(--help): Print this help information.");
 }
 

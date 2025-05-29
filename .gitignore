@@ -16,3 +16,9 @@
 /test_main/*.log.bak
 /test_main/test_client
 /test_main/test_server
+/src/*.h
+/etc/
+/sqlite3/
+/lib/
+cscope.*
+tags
