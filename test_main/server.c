@@ -172,7 +172,7 @@ int main(int argc, char **argv)
 					close(event_array[i].data.fd);
 					continue;
 				}
-				log_info("New client connected: fd = %d", connfd);
+				printf("New client connected: fd = %d\n", connfd);
 			}
 
 			else  //已连接的客户端有数据收发
