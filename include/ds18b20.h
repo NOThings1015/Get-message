@@ -14,9 +14,6 @@
 #ifndef	DS18B20_H_
 #define DS18B20_H_
 
-extern int  get_ds18b20_tmp(char *serial_number, float *temp);
+extern int  get_ds18b20_tmp(float *temp);
 
-extern int generate_sensor_message(char *serial_number, char *buffer, int buffer_size);
-
-extern int get_custom_serial(char *serial_number, int buffer_size);
 #endif

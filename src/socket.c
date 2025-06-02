@@ -25,7 +25,9 @@
 #include <ctype.h>
 #include <netdb.h> 
 #include <netinet/tcp.h>
+
 #include "socket.h"
+#include "logger.h"
 
 
 int socket_server_init(char *listen_ip,int listen_port)
@@ -82,102 +84,185 @@ int socket_server_init(char *listen_ip,int listen_port)
 }
 
 
-int socket_client_init(const char *server_ip, int server_port, struct sockaddr_in *serv_addr)
+
+int socket_init(socket_ctx_t *sock, char *host, int port)
 {
-	int       	            	connfd;
-
-	char 						port_str[16];
-	struct addrinfo				hints;
-	struct addrinfo				*res;	
-
-	struct addrinfo 			*p;
-
-	//创建套接字
-	connfd=socket(AF_INET, SOCK_STREAM, 0); 
-	if(connfd < 0)
-	{   
-		printf("Create socket failure: %s",strerror(errno));
-		return -1; 
-	}   
-
-	// 检查输入是否为有效的点分十进制 IP 地址
-	if (inet_pton(AF_INET, server_ip, &serv_addr->sin_addr) > 0)
+	if( !sock || port <= 0 )
 	{
+		return -1;
+	}
 
-		memset(serv_addr, 0, sizeof(struct sockaddr_in));
-		serv_addr->sin_family = AF_INET;
-		serv_addr->sin_port = htons(server_port);
+	memset(sock, 0, sizeof(*sock));
+	sock->fd = -1;
+	sock->port = port;
+	if( host )
+	{
+		strncpy(sock->host, host, HOSTNAME_LEN);
+	}
+
+	sock->connected = 0;
+	return 0;
+}
+
+
+
+int socket_terminate(socket_ctx_t *sock)
+{
+	if( !sock )
+		return -1;
+
+	if( sock->fd > 0)
+	{
+		close(sock->fd);
+		sock->fd = -1;
+		sock->connected = 0;
+	}
+
+	return 0;
+}
+
+
+int socket_connect(socket_ctx_t *sock)
+{
+	int       	            	sockfd = 0;
+	int							rv = -1;
+	char 						service[16];
+	struct addrinfo				hints, *rp;
+	struct addrinfo			   *res = NULL;	
+	struct in_addr				inaddr;
+	struct sockaddr_in			addr;
+	int							len = sizeof(addr);
+	
+
+	if( !sock )
+	{
+		return -1;
+	}
+
+	socket_terminate(sock);
+
+	memset(&hints, 0, sizeof(struct addrinfo));
+	hints.ai_family = AF_UNSPEC; 					/*  support IPv4 and IPv6 */
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP; 			/*  TCP protocol */
+
+	if( inet_aton(sock->host, &inaddr) )
+	{
+		hints.ai_flags |= AI_NUMERICHOST;
+	}
+
+	snprintf(service, sizeof(service), "%d", sock->port);
+
+	if( (rv=getaddrinfo(sock->host, service, &hints, &res)) )
+	{
+		log_error("getaddrinfo() parser [%s:%s] failed: %s\n", sock->host, service, gai_strerror(rv));
+		return -3;
+	}
+
+	for (rp=res; rp!=NULL; rp=rp->ai_next)
+	{	
+		sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+		if( sockfd < 0)
+		{
+			log_error("socket() create failed: %s\n", strerror(errno));
+			rv = -3;
+			continue;
+		}
+
+		/*  connect to server */
+		rv = connect(sockfd, rp->ai_addr, len);
+		
+		if( 0 == rv )
+		{
+			sock->fd = sockfd;
+			log_info("Connect to server[%s:%d] on fd[%d] successfully!\n", sock->host, sock->port, sockfd);
+			break;
+		}
+		else
+		{
+			/*  socket connect get error, try another IP address */
+			close(sockfd);
+			continue;
+		}
+	}
+
+	freeaddrinfo(res);
+	return rv;
+}
+
+
+int socket_status( socket_ctx_t *sock )
+{
+	struct tcp_info 		info;
+	socklen_t 				info_len = sizeof(info);
+	int               		changed = 0;
+
+	if( !sock )
+	{
+		return 0;
+	}
+
+	if( sock->fd < 0 )
+	{
+		/*  socket is connected before but got disconnected now */
+		changed = sock->connected ? 1 : 0;
+		sock->connected = 0;
+		goto out;
+	}
+
+	getsockopt(sock->fd, IPPROTO_TCP, TCP_INFO, &info, (socklen_t *)&info_len);
+	
+	if( TCP_ESTABLISHED==info.tcpi_state )
+	{
+		/*  socket is disconnected before but got connected now */
+		changed = !sock->connected ? 1 : 0;
+		sock->connected = 1;
 	}
 
 	else
 	{
-		//初始化hints结构体
-		memset(&hints, 0, sizeof(hints));
-		hints.ai_family = AF_INET;
-		hints.ai_socktype = SOCK_STREAM;
+		/*  socket is connected before but got disconnected now */
+		changed = sock->connected ? 1 : 0;
+		sock->connected = 0;
+	}
 
-		snprintf(port_str, sizeof(port_str), "%d", server_port);
+out:
+	if( changed )
+	{
+		log_info("socket status got %s\n", sock->connected?"connected":"disconnected");
+	}
 
-		// 使用 getaddrinfo 域名解析
-		if (getaddrinfo(server_ip, port_str, &hints, &res) != 0)
+	return sock->connected;
+}
+
+
+int socket_send(socket_ctx_t *sock, char *data, int length)
+{
+	int total_sent = 0;         //累计发送量
+	int rv = 0 ; 
+
+	while (total_sent < length) 
+	{    
+		rv = write(sock->fd, data + total_sent, length - total_sent);
+ 
+		if (rv < 0)
 		{
-			printf("Invalid IP address or domain name: %s\n", server_ip);
-			close(connfd);
+			log_error("socket[%d] write() failure: %s, close socket now\n", sock->fd, strerror(errno));
 			return -2;
 		}
 
-		for ( p = res; p!= NULL; p = p->ai_next )
+		if (rv == 0)
 		{
-			if ( p->ai_family == AF_INET )
-			{
 
-				memcpy(serv_addr, res->ai_addr, sizeof(struct sockaddr_in));
-				serv_addr->sin_port = htons(server_port);
-				break;
-			}
+			log_error("socket[%d] write() returned 0, connection might be closed by peer\n", sock->fd);
+			return -2;
 		}
 
-		freeaddrinfo(res);
-
-		if ( p == NULL )
-		{
-			printf("No valid IPv4 address found for %s\n", server_ip);
-			close(connfd);
-			return -3;
-		}
-	}
-	return connfd;
-}
-
-
-
-
-
-int socket_connected( int *connfd )
-{
-	struct tcp_info 		info;
-	socklen_t 				info_len = sizeof(info);
-
-	// 在发送数据之前检查连接状态
-	if( getsockopt(*connfd, IPPROTO_TCP, TCP_INFO, &info, &info_len) < 0 )
-	{
-		close(*connfd);
-		*connfd = -1;
-		return 1;
-	}
-
-	if( info.tcpi_state != TCP_ESTABLISHED )
-	{
-		close(*connfd);
-		*connfd = -1;
-		return 1;
-	}
+		total_sent += rv; 
+	}  
 
 	return 0;
-
 }
-
-
 
 
 

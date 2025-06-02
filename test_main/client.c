@@ -39,14 +39,14 @@ void print_client_usage(char *progname)
 	log_info("%s usage method:", progname);
 	log_info("-i(--ip): Specify server IP address to connect.");
 	log_info("-p(--port): Specify server port to connect.");
-	log_info("-t(--time): Client message sending interval.");
+	log_info("-t(--time_interval): Client message sending interval.");
+	log_info("-d(--debug): Running to debug.");
 	log_info("-h(--help): Print this help information.");
 }
 
-
 void handle_sigpipe(int sig); 
-
 int check_sample_time(time_t *last_time, int interval);
+
 
 int main(int argc, char **argv)
 {
@@ -58,7 +58,7 @@ int main(int argc, char **argv)
 	char					buf[1024];
 	socket_ctx_t         	sock;
 
-	int						interval_time;				//采样时间间隔(单位秒)
+	int						interval_time;			
 	time_t 					last_time = 0;
 	
 	char                    sample_time[52];
@@ -168,9 +168,7 @@ int main(int argc, char **argv)
 			//获取产品序列号
 			get_serial_number(serial_number, sizeof(serial_number), 3);
 
-	
-	/*#################################################################################*/
-
+			
 			//格式化采样数据
 			rv = snprintf(w_message, sizeof(w_message), "%s: %s, temperature: %.3f\n", sample_time, serial_number, temp);
 
@@ -207,21 +205,21 @@ int main(int argc, char **argv)
 		}
 
 		//上报数据					
-		if( mess_flage == 1 )		//如果有数据则发送
+		if( mess_flage == 1 )		
 		{
-			if (socket_send(&sock, w_message, strlen(w_message)) < 0) //发送当前数据
+			if (socket_send(&sock, w_message, strlen(w_message)) < 0) 
 			{
-				log_error("Failed to send message to server: [%s:%d]", server_ip, server_port);
+				log_error("Failed to send message to server: [%s:%d]", sock.host, sock.port);
 				sqlite_write(db, w_message);	//发送失败，写入数据库
 				socket_terminate(&sock);
-				continue; // 跳出内层循环，触发重连
+				continue; //触发重连
 			}	
 
 			log_info("Message sent successfully: %s", w_message);
 			mess_flage = 0;
 		}
 
-		//发送清空数据库中数据
+		//发送/清空数据库中数据
 		if(!is_database_empty(db))		
 		{
 			//读取数据库第一行
@@ -232,12 +230,13 @@ int main(int argc, char **argv)
 			}
 
 			mess_flage = 1;
+
 			//发送读取的数据
-			if (socket_send(&sock, w_message, strlen(w_message)) < 0) //发送当前数据
+			if (socket_send(&sock, w_message, strlen(w_message)) < 0) 
 			{
-				log_error("Failed to send message to server: [%s:%d]", server_ip, server_port);
+				log_error("Failed to send message to server: [%s:%d]", sock.host, sock.port);
 				socket_terminate(&sock);
-				continue; // 跳出内层循环，触发重连
+				continue; //触发重连
 			}	
 
 			mess_flage = 0;
@@ -245,7 +244,7 @@ int main(int argc, char **argv)
 			log_info("Message sent successfully: %s", w_message);
 
 			//删除数据库中已发送的数据
-			if ( delete_1st_row(db, table_name) < 0 )  	//成功读取数据则删除缓存区
+			if ( delete_1st_row(db, table_name) < 0 )  	
 			{
 				log_error("Failed to delete message from sqlite: %s", sqlite_path);
 			}

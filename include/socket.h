@@ -14,14 +14,28 @@
 
 #define SOCKET_H_
 
+#define HOSTNAME_LEN          64
+
+typedef struct socket_ctx_s
+{
+	char        host[HOSTNAME_LEN]; /*  CLIENT: Connect server hostname; SERVER: Unused */
+	int         port;               /*  CLIENT: Connect server port;     SERVER: listen port */
+	int         fd;                 /*  socket descriptor  */
+	int         connected;          /*  socket connect status: 1->connected 0->disconnected  */
+} socket_ctx_t;
+
+
 extern int socket_server_init(char *listen_ip,int listen_port); //服务器端定义
 
-extern int socket_client_init(const char *server_ip, int server_port, struct sockaddr_in *serv_addr); //客户端定义
+extern int socket_init(socket_ctx_t *sock, char *host, int port); 
 
-extern void Print_Client_Usage(char *progname); //客户端使用方法
+extern int socket_connect(socket_ctx_t *sock);
 
-extern void Print_Server_Usage(char *progname); //服务器使用方法
+extern int socket_status(socket_ctx_t *sock);
 
-extern int socket_connected( int *connfd );
+extern int socket_terminate(socket_ctx_t *sock);
+
+extern int socket_send(socket_ctx_t *sock, char *data, int length);
+
 #endif
 
