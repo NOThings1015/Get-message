@@ -16,7 +16,7 @@
 #include <signal.h>
 #include <time.h>
 
-#define DEVID_LEN          8
+#define DEVID_LEN          13
 
 typedef struct pack_info_s
 {
@@ -25,9 +25,18 @@ typedef struct pack_info_s
 	float         temper;            	/*  sample temperature */
 } pack_info_t;
 
+
+typedef int (* pack_proc_t)(pack_info_t *pack_info, uint8_t *pack_buf, int size);//typedef 返回值类型 (*类型名)(参数列表)
+
 extern int get_serial_number(char *serial_number, int size, int sn);
 
-extern int get_time(char *buffer, int buf_size);
+extern int get_time(struct tm *now_time);
 
+extern int packet_segmented_pack(pack_info_t *pack_info, uint8_t *pack_buf, int size);
 
+extern int packet_json_pack(pack_info_t *pack_info, uint8_t *pack_buf, int size);
+
+extern int packet_tlv_pack(pack_info_t *pack_info, uint8_t *pack_buf, int size);
+
+extern int packet_tlv_unpack(const uint8_t *pack_buf, int size, pack_info_t *pack_info);
 #endif

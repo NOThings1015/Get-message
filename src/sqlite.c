@@ -16,87 +16,199 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <stdint.h>
+
 #include "sqlite.h"
+#include "logger.h"
 
+#define TABLE_NAME "PackTable"	//对当前文件有效,其他文件无法直接使用
 
-//时间戳去重机制
-//问题原因：
-//若客户端断线期间多次写入相同数据，服务器无法识别重复消息。
-sqlite3 *sqlite_open(char *sqlite_path)
+int sqlite_init(char *sqlite_path, sqlite3 **cli_db)
 {
-		sqlite3 *db;
-    	char *errMsg = NULL;
-    	int rc;
-		
-		const char *createTableSQL = "CREATE TABLE IF NOT EXISTS TempData ("
-                                "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-								"timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, "  // 新增时间戳字段
-                                "data TEXT NOT NULL);";
+    	char 					*errmsg = NULL;
+    	char					sql[1024] = {0};
 
-
-    	rc = sqlite3_open(sqlite_path, &db);
-    	if (rc) 
+		if( !sqlite_path )
 		{
-    		    fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
-        		sqlite3_close(db);
-       			return NULL;
-    	}
+			log_error("%s() Invalid input arguments\n", __func__);
+			return -1;
+		}
 
-    	rc = sqlite3_exec(db, createTableSQL, NULL, NULL, &errMsg);
-    	if (rc != SQLITE_OK) 
+
+		if( 0==access(sqlite_path, F_OK) )
 		{
-	    	    fprintf(stderr, "SQL error: %s\n", errMsg);
-    		   	sqlite3_free(errMsg);
-        		sqlite3_close(db);
-       			return NULL;
-    	}
+			if( SQLITE_OK != sqlite3_open(sqlite_path, cli_db) )
+			{
+				log_error("open database file '%s' failure\n", sqlite_path);
+				return -2;
+			}
+			log_info("open database file '%s' ok\n", sqlite_path);
+			return 0;
+		}
 
-    	return db;
-}
 
-
-int	sqlite_write(sqlite3 *db, char *message)
-{
-	char 			*errMsg = NULL;
-	int 			rc=-1;
-
-	// 插入临时数据（使用参数化查询）
-	const char *insertSQL = "INSERT INTO TempData (data) VALUES (?);";
-	sqlite3_stmt *stmt;
-	rc = sqlite3_prepare_v2(db, insertSQL, -1, &stmt, NULL);
-	if (rc != SQLITE_OK) 
-	{
-			fprintf(stderr, "SQL error: %s\n", errMsg);
-			sqlite3_free(errMsg);
+		if( SQLITE_OK != sqlite3_open(sqlite_path, cli_db) )
+		{
+			log_error("create database file '%s' failure\n", sqlite_path);
 			return -2;
-	}
-	
-	// 绑定参数
-	rc = sqlite3_bind_text(stmt, 1, message, -1, SQLITE_STATIC);
-	if (rc != SQLITE_OK)
-	{
-			fprintf(stderr, "SQL error: %s\n", sqlite3_errmsg(db));
-			sqlite3_finalize(stmt);
+		}
+
+		sqlite3_exec(*cli_db, "pragma synchronous = OFF; ", NULL, NULL, NULL);//设置 SQLite 的同步模式为 OFF,禁止同步写入
+
+		sqlite3_exec(*cli_db, "pragma auto_vacuum = 2 ; ", NULL, NULL, NULL);//自动清理，自动回收删除数据后的空间
+
+		snprintf(sql, sizeof(sql), "CREATE TABLE %s(packet BLOB);", TABLE_NAME);
+		if( SQLITE_OK != sqlite3_exec(*cli_db, sql, NULL, NULL, &errmsg) )
+		{
+			log_error("create data_table in database file '%s' failure: %s\n", sqlite_path, errmsg);
+			sqlite3_free(errmsg); 		/*  free errmsg  */
+			sqlite3_close(*cli_db);   	/*  close databse */
+			unlink(sqlite_path);      	/*  remove database file */
 			return -3;
-	}
-	
-	// 执行插入操作
-	rc = sqlite3_step(stmt);
-	if (rc != SQLITE_DONE)
-	{
-			fprintf(stderr, "SQL error: %s\n", sqlite3_errmsg(db));
-			sqlite3_finalize(stmt);
-			return -4;									
-	}
+		}
 
-
-	printf("[SUCCESS] Data written to SQLite: %s\n", message);  // 打印插入成功日志
-	
-	sqlite3_finalize(stmt);
-	
-	//printf("[INFO] SQLite write operation completed.\n"); // 打印最终操作结果
-	return 0;
+    	return 0;
 }
+
+
+void sqlite_terminate(sqlite3 *cli_db)
+{
+	log_warn("close sqlite database now\n");
+	sqlite3_close(cli_db);
+
+	return ;
+}
+
+
+int	sqlite_write(sqlite3 *cli_db, void *pack, int size)
+{
+	char 					*errmsg = NULL;
+	int 					rv = -1;
+	sqlite3_stmt			*stat = NULL;
+	char					sql[1024] = "";
+
+	if( !pack || size<=0 )
+	{
+		log_error("%s() Invalid input arguments\n", __func__);
+		return -1;
+	}
+
+	if( ! cli_db )
+	{
+		log_error("sqlite database not opened\n");
+		return -2;
+	}
+
+	snprintf(sql, sizeof(sql), "INSERT INTO %s(packet) VALUES(?)", TABLE_NAME);
+	rv = sqlite3_prepare_v2(cli_db, sql, -1, &stat, NULL);	//预编译
+	if(SQLITE_OK!=rv || !stat)
+	{
+		log_error("blob add sqlite3_prepare_v2 failure\n");
+		rv = -2;
+		goto OUT;
+	}
+
+	if( SQLITE_OK != sqlite3_bind_blob(stat, 1, pack, size, NULL) )//绑定参数
+	{
+		log_error("blob add sqlite3_bind_blob failure\n");
+		rv = -3;
+		goto OUT;
+	}
+
+	rv = sqlite3_step(stat); //执行预编译语句
+	if( SQLITE_DONE!=rv && SQLITE_ROW!=rv )
+	{
+		log_error("blob add sqlite3_step failure\n");
+		rv = -4;
+		goto OUT;
+	}
+
+
+	printf("write to sqlite: ");
+	for (int i = 0; i < size; i++)
+	{
+		printf("%02x ", ((uint8_t *)pack)[i]);
+	}
+	printf("\n");
+
+
+OUT:
+	sqlite3_finalize(stat); //释放sqlite3_stmt对象
+
+	if( rv < 0 )
+		log_error("add new blob packet into database failure, rv=%d\n", rv);
+	else
+		log_info("add new blob packet into database ok\n");
+
+	return rv;
+}
+
+
+
+
+int sqlite_check_read(sqlite3 *cli_db, void *pack, int size, int *bytes)
+{
+	char               sql[1024]={0};
+	int                rv = 0;
+	sqlite3_stmt      *stat = NULL;
+	const void        *blob_ptr;
+
+	if( !pack || size<=0 )
+	{
+		log_error("%s() Invalid input arguments\n", __func__);
+		return -1;
+	}
+
+	if( ! cli_db )
+	{
+		log_error("sqlite database not opened\n");
+		return -2;
+	}
+
+	/*  Only query the first packet record */
+	snprintf(sql, sizeof(sql), "SELECT packet FROM %s WHERE rowid = (SELECT rowid FROM %s LIMIT 1);", TABLE_NAME, TABLE_NAME);
+	rv = sqlite3_prepare_v2(cli_db, sql, -1, &stat, NULL);
+	if(SQLITE_OK!=rv || !stat)
+	{
+		log_error("firehost sqlite3_prepare_v2 failure\n");
+		rv = -3;
+		goto out;
+	}
+
+	rv = sqlite3_step(stat);//执行预编译语句
+	if( SQLITE_DONE!=rv && SQLITE_ROW!=rv ) //SQLITE_ROW：表示查询成功，返回一行数据；SQLITE_DONE：查询成功完成，但没有数据
+	{
+		log_error("firehost sqlite3_step failure\n");
+		rv = -5;
+		goto out;
+	}
+
+	/*  1rd argument<0> means first segement is packet  */
+	blob_ptr = sqlite3_column_blob(stat, 0);	//获取 BLOB 数据的指针
+	if( !blob_ptr )
+	{
+		rv = -6;
+		goto out;
+	}
+
+	*bytes = sqlite3_column_bytes(stat, 0);		//获取 BLOB bytes大小
+
+	if( *bytes > size )
+	{
+		log_error("blob packet bytes[%d] larger than bufsize[%d]\n", *bytes, size);
+		*bytes = 0;
+		rv = -1;
+	}
+
+	memcpy(pack, blob_ptr, *bytes);
+	rv = 0;
+
+out:
+	sqlite3_finalize(stat);
+	return rv;
+}
+
+
 
 
 int sqlite_read_1st(sqlite3 *db, char *buf, int buf_size) 
@@ -132,26 +244,33 @@ int sqlite_read_1st(sqlite3 *db, char *buf, int buf_size)
 
 
 
-int delete_1st_row(sqlite3 *db, char* table_name) 
+int delete_1st_row(sqlite3 *cli_db) 
 {
-		char		*error_message = NULL;
-		int			rc = 0;
-		char sql_query[256];	// 构建 DELETE 语句
-		
-		snprintf(sql_query, sizeof(sql_query), "DELETE FROM %s WHERE id = (SELECT id FROM %s ORDER BY id ASC LIMIT 1);", table_name, table_name);
+	char               sql[1024]={0};
+	char              *errmsg = NULL;
 
-		rc = sqlite3_exec(db, sql_query, NULL, NULL, &error_message);	// 执行 SQL 语句
-		if (rc != SQLITE_OK) 
-		{
-				fprintf(stderr, "SQL error: %s\n", error_message);
-				sqlite3_free(error_message);
-				return -1;
-		}
+	if( ! cli_db )
+	{
+		log_error("sqlite database not opened\n");
+		return -2;
+	}
 
-		printf("Row deleted successfully.\n");
-		return 0;
+	/*   remove packet from db */
+	memset(sql, 0, sizeof(sql));
+	snprintf(sql, sizeof(sql), "DELETE FROM %s WHERE rowid = (SELECT rowid FROM %s LIMIT 1);", TABLE_NAME, TABLE_NAME);
+	if( SQLITE_OK != sqlite3_exec(cli_db, sql, NULL, 0, &errmsg) )
+	{
+		log_error("delete first blob packet from database failure: %s\n", errmsg);
+		sqlite3_free(errmsg);
+		return -2;
+	}
+	log_warn("delete first blob packet from database ok\n");
+
+	/*   Vacuum the database */
+	sqlite3_exec(cli_db, "VACUUM;", NULL, 0, NULL);
+
+	return 0;
 }
-
 
 
 //按时间顺序读取数据

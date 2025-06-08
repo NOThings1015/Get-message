@@ -26,7 +26,6 @@
 #include <netinet/tcp.h>
 #include <sqlite3.h>
 
-#include "logger.h"
 #include "ds18b20.h"
 #include "sqlite.h"
 #include "socket.h"
@@ -65,14 +64,20 @@ int main(int argc, char **argv)
 	char					w_message[256] = "";
 	float					temp;
 	char					serial_number[32] = "";
-	
+
+
+ 	pack_info_t          	pack_info;
+	pack_proc_t				pack_proc = packet_tlv_pack;
+
+	char					pack_buf[1024];
+	int						pack_bytes = 0;
 
 	char 					*log_file = "client.log";
 	int 					log_level = LOG_LEVEL_DEBUG;
 	int 					log_size = 1024;
-	char            		sqlite_path[128]="../sqlite3/Temp.db";
+	char            		*sqlite_path="/home/iot25/yangjiayu/Get-message/sqlite3/Temp.db";
 	int    					conn_flag = 0;
-	char*					table_name = "TempData";
+	
 	int 					mess_flage = 0;
 	int						rv = -1;
 	int                     error = 0;
@@ -128,7 +133,7 @@ int main(int argc, char **argv)
 		return -2;
 	}
 
-	if(( db = sqlite_open(sqlite_path)) == NULL )
+	if( sqlite_init(sqlite_path, &db) < 0 )
 	{
 		printf("Failed to open SQLite database: %s", sqlite_path);
 		return -1;
@@ -151,36 +156,28 @@ int main(int argc, char **argv)
 
 		//单位时间采样：
 		mess_flage = 0;
-
+		
 		if( check_sample_time(&last_time, interval_time) )
 		{
-			memset(w_message, 0, sizeof(w_message));	
-			
 			//获取温度
-			if (get_ds18b20_tmp(&temp) < 0 )
+			if (get_ds18b20_tmp(&pack_info.temper) < 0 )
 			{
 				log_error("ds18b20 get temperature failure: %s\n", strerror(errno));
 			}
 
 			//获取时间
-			get_time(sample_time, sizeof(sample_time));
+			get_time(&pack_info.sample_time);
 
 			//获取产品序列号
-			get_serial_number(serial_number, sizeof(serial_number), 3);
-
+			get_serial_number(pack_info.devid, sizeof(pack_info.devid), 3);
 			
 			//格式化采样数据
-			rv = snprintf(w_message, sizeof(w_message), "%s: %s, temperature: %.3f\n", sample_time, serial_number, temp);
-
-			if (rv < 0 || rv >= sizeof(w_message))
-			{
-				log_error("Message formatting failed\n");
-			}
+			pack_bytes = pack_proc(&pack_info, (uint8_t *)pack_buf, sizeof(pack_buf));
 
 			mess_flage = 1;
-			log_info("Get temperature message: %s", w_message);
+			log_info("Get temperature message: %s", pack_buf);
 		}
-
+		
 		// 在发送数据之前检查连接状态
 		conn_flag = socket_status(&sock);  
 		
@@ -192,7 +189,11 @@ int main(int argc, char **argv)
 				//有数据则暂存
 				if( mess_flage == 1 )
 				{
-					sqlite_write(db, w_message);
+					if (sqlite_write(db, pack_buf, pack_bytes) < 0)
+					{
+						printf("write to sqlite error\n");
+					}
+					
 					log_info("Message stored in database due to connection failure.");
 				}	
 
@@ -207,23 +208,22 @@ int main(int argc, char **argv)
 		//上报数据					
 		if( mess_flage == 1 )		
 		{
-			if (socket_send(&sock, w_message, strlen(w_message)) < 0) 
+			if (socket_send(&sock, pack_buf, pack_bytes) < 0) 
 			{
 				log_error("Failed to send message to server: [%s:%d]", sock.host, sock.port);
-				sqlite_write(db, w_message);	//发送失败，写入数据库
+				sqlite_write(db, pack_buf, pack_bytes);	//发送失败，写入数据库
 				socket_terminate(&sock);
 				continue; //触发重连
 			}	
 
-			log_info("Message sent successfully: %s", w_message);
+			log_info("Message sent successfully: %s", pack_buf);
 			mess_flage = 0;
 		}
-
+		
 		//发送/清空数据库中数据
-		if(!is_database_empty(db))		
+		if( !sqlite_check_read(db, pack_buf, sizeof(pack_buf), &pack_bytes) )		
 		{
-			//读取数据库第一行
-			if ( (sqlite_read_1st(db, w_message, sizeof(w_message))) <  0 )
+			if (socket_send(&sock, pack_buf, pack_bytes) < 0) 
 			{
 				log_error("Failed to get message from sqlite: %s", sqlite_path);
 				continue;
@@ -232,7 +232,7 @@ int main(int argc, char **argv)
 			mess_flage = 1;
 
 			//发送读取的数据
-			if (socket_send(&sock, w_message, strlen(w_message)) < 0) 
+			if (socket_send(&sock, pack_buf, pack_bytes) < 0) 
 			{
 				log_error("Failed to send message to server: [%s:%d]", sock.host, sock.port);
 				socket_terminate(&sock);
@@ -241,10 +241,10 @@ int main(int argc, char **argv)
 
 			mess_flage = 0;
 
-			log_info("Message sent successfully: %s", w_message);
+			log_info("Message sent successfully: %s", pack_buf);
 
 			//删除数据库中已发送的数据
-			if ( delete_1st_row(db, table_name) < 0 )  	
+			if ( delete_1st_row(db) < 0 )  	
 			{
 				log_error("Failed to delete message from sqlite: %s", sqlite_path);
 			}

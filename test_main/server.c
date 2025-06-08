@@ -24,10 +24,10 @@
 #include <sys/epoll.h>
 #include <ctype.h> 
 
-#include "loca_time.h"
 #include "sqlite.h"
 #include "socket.h"
 #include "logger.h" 
+#include "packet.h"
 
 #define	 Max_event	512
 
@@ -35,6 +35,10 @@ void Print_Server_Usage(char *progname);
 
 int main(int argc, char **argv)
 {
+
+	pack_info_t 			*pack_info;
+
+
 	char					*progname=NULL;
 	int						rv=-5;
 	int						connfd=-1;
@@ -55,7 +59,7 @@ int main(int argc, char **argv)
 	int                     log_level = LOG_LEVEL_DEBUG;
 	int                     log_size = 1024;
 
-	char                    sqlite_path[128]="/home/iot25/yangjiayu/Get-message/src/../sqlite3/Storage_temp.db";
+	char                    *sqlite_path="/home/iot25/yangjiayu/Get-message/sqlite3/Storage_temp.db";
 	sqlite3					*db;
 	struct option   opts[]={
 		{"port", required_argument, NULL, 'p'},     // -p 或 --port，需参数（端口号）
@@ -123,7 +127,7 @@ int main(int argc, char **argv)
 	}
 
 
-	if(( db = sqlite_open(sqlite_path)) == NULL )
+	if( sqlite_init(sqlite_path, &db) < 0  )
 	{
 		log_error("Failed to open SQLite database: %s", sqlite_path);
 		return -1;
@@ -189,10 +193,20 @@ int main(int argc, char **argv)
 				}	
 
 
-				else
+				packet_tlv_unpack((uint8_t *)buf, rv, pack_info);
+
+/*  
+				char     strtime[1024]="";
+				char     buflllll[1024]="";
+				strftime(strtime, sizeof(strtime), "%Y-%m-%d %H:%M:%S", &pack_info->sample_time);
+				snprintf(buflllll, sizeof(buflllll), "{\"devid\":\"%s\", \"time\":\"%s\",\"temperature\":\"%.3f\"}", pack_info->devid, strtime, pack_info->temper);
+				printf("sample_data:%s\n",buflllll);
+*/
+
+				if( rv > 0 )
 				{
 					log_info("Received %d bytes from client fd = %d: %s", rv, event_array[i].data.fd, buf);
-					if( (sqlite_write(db, buf)) < 0 )     //上传数据存储到指定库文件里面
+					if( (sqlite_write(db, buf, rv)) < 0 )     //上传数据存储到指定库文件里面
 					{
 						log_error("Failed to write to SQLite database.");
 						return -2;
