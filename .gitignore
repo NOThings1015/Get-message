@@ -17,8 +17,11 @@
 /test_main/test_client
 /test_main/test_server
 /src/*.h
+/src/sqlite
 /etc/
 /sqlite3/
+/include/send.h
+/include/usage.h
 /lib/
 cscope.*
 tags
